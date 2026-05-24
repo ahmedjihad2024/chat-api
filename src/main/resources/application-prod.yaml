@@ -1,0 +1,47 @@
+# Production profile: hardened error responses (no stacktraces or messages
+# leaked to clients), response compression, quiet logging, and CORS origins
+# sourced from the CORS_ALLOWED_ORIGINS environment variable.
+server:
+  # Port from the PORT env var (set by the platform), falling back to 8080.
+  port: ${PORT:8080}
+  error:
+    # Never leak stack traces to clients in production.
+    include-stacktrace: never
+    # Hide exception messages — they can reveal internals.
+    include-message: never
+    # Don't expose validation binding errors verbatim.
+    include-binding-errors: never
+    # Don't echo the exception class name in error responses.
+    include-exception: false
+  compression:
+    # Gzip responses to cut bandwidth.
+    enabled: true
+    # Only compress content types where it's actually worth it.
+    mime-types: application/json,application/xml,text/html,text/plain
+
+logging:
+  level:
+    # Keep prod logs quiet; only warnings/errors by default.
+    root: WARN
+    # App package logs at INFO so we still see business events.
+    com.example.chat: INFO
+    org.springframework.web: WARN
+    org.springframework.security: WARN
+    org.mongodb.driver: WARN
+
+app:
+  # Send real email in production.
+  mailer: smtp
+  cors:
+    # Comma-separated list of allowed origins, injected at deploy time.
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:}
+
+
+# Turn off Swagger UI and the raw OpenAPI spec in production — they expose the
+# full API surface (endpoints, payload schemas, validation rules) and are meant
+# for development only. Both stay enabled in the dev profile.
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

@@ -1,7 +1,8 @@
 package com.example.chat.follows
 
 import com.example.chat.common.dto.ApiResponse
-import com.example.chat.follows.dto.FollowsResponse
+import com.example.chat.follows.dto.ToggleFollowee
+import com.example.chat.user.dto.UserResponse
 import org.bson.types.ObjectId
 import org.springframework.data.domain.Pageable
 import org.springframework.data.domain.Sort
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
+
 
 @RestController
 @RequestMapping("/api")
@@ -26,10 +28,10 @@ class FollowController(
      */
     @PostMapping("/follows/toggle-following/{id}")
     fun toggleFollow(
-        @PathVariable id: ObjectId,
+        @PathVariable id: String,
         @AuthenticationPrincipal currentUserId: String,
-    ): ApiResponse<FollowsResponse.ToggleFollowee> =
-        ApiResponse.ok(followService.toggle(ObjectId(currentUserId), id))
+    ): ApiResponse<ToggleFollowee> =
+        ApiResponse.ok(followService.toggle(currentUserId, id))
 
     // --- My own lists ---
 
@@ -37,15 +39,15 @@ class FollowController(
     fun myFollowers(
         @AuthenticationPrincipal currentUserId: String,
         @PageableDefault(size = 20, sort = ["createdAt"], direction = Sort.Direction.DESC) pageable: Pageable,
-    ): ApiResponse<FollowsResponse.Follows> =
-        ApiResponse.ok(followService.followers(ObjectId(currentUserId), pageable))
+    ): ApiResponse<List<UserResponse>> =
+        followService.followers(ObjectId(currentUserId), pageable)
 
     @GetMapping("/follows/following")
     fun myFollowing(
         @AuthenticationPrincipal currentUserId: String,
         @PageableDefault(size = 20, sort = ["createdAt"], direction = Sort.Direction.DESC) pageable: Pageable,
-    ): ApiResponse<FollowsResponse.Follows> =
-        ApiResponse.ok(followService.following(ObjectId(currentUserId), pageable))
+    ): ApiResponse<List<UserResponse>> =
+        followService.following(ObjectId(currentUserId), pageable)
 
     // --- Another user's lists ---
 
@@ -53,13 +55,14 @@ class FollowController(
     fun userFollowers(
         @PathVariable id: ObjectId,
         @PageableDefault(size = 20, sort = ["createdAt"], direction = Sort.Direction.DESC) pageable: Pageable,
-    ): ApiResponse<FollowsResponse.Follows> =
-        ApiResponse.ok(followService.followers(id, pageable))
+    ): ApiResponse<List<UserResponse>> =
+        followService.followers(id, pageable)
 
     @GetMapping("/follows/following/{id}")
     fun userFollowing(
         @PathVariable id: ObjectId,
         @PageableDefault(size = 20, sort = ["createdAt"], direction = Sort.Direction.DESC) pageable: Pageable,
-    ): ApiResponse<FollowsResponse.Follows> =
-        ApiResponse.ok(followService.following(id, pageable))
+    ): ApiResponse<List<UserResponse>> =
+        followService.following(id, pageable)
 }
+

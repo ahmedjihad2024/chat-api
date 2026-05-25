@@ -1,8 +1,10 @@
 package com.example.chat.admin
 
 import com.example.chat.common.exception.ApiException
+import com.example.chat.user.dto.UserResponse
 import com.example.chat.user.enums.Role
 import com.example.chat.user.entities.User
+import com.example.chat.user.mapper.toResponse
 import com.example.chat.user.repository.UserRepository
 import org.bson.types.ObjectId
 import org.springframework.data.domain.Page
@@ -14,8 +16,8 @@ class AdminService(
     private val userRepository: UserRepository,
 ) {
 
-    fun listUsers(pageable: Pageable): Page<User> =
-        userRepository.findAll(pageable)
+    fun listUsers(pageable: Pageable): Page<UserResponse> =
+        userRepository.findAll(pageable).map { it.toResponse() }
 
     fun updateRoles(targetUserId: ObjectId, currentUserId: String, roleNames: Set<String>): User {
         if (targetUserId.toHexString() == currentUserId) {

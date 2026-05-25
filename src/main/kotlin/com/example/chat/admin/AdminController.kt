@@ -2,7 +2,6 @@ package com.example.chat.admin
 
 import com.example.chat.admin.dto.UpdateUserRolesRequest
 import com.example.chat.common.dto.ApiResponse
-import com.example.chat.common.dto.PageResponse
 import com.example.chat.user.dto.UserResponse
 import com.example.chat.user.mapper.toResponse
 import jakarta.validation.Valid
@@ -30,8 +29,8 @@ class AdminController(
     fun listUsers(
         @PageableDefault(size = 20, sort = ["name"], direction = Sort.Direction.ASC)
         pageable: Pageable,
-    ): ApiResponse<PageResponse<UserResponse>> =
-        ApiResponse.ok(PageResponse.from(adminService.listUsers(pageable)) { it.toResponse() })
+    ): ApiResponse<List<UserResponse>> =
+        ApiResponse.paged(adminService.listUsers(pageable))
 
     @PatchMapping("/users/{id}/roles")
     fun updateRoles(

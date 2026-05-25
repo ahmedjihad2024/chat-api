@@ -1,11 +1,14 @@
 package com.example.chat.follows
 
+import com.example.chat.common.dto.ApiResponse
 import com.example.chat.common.exception.ApiException
-import com.example.chat.follows.dto.FollowsResponse
+import com.example.chat.follows.dto.ToggleFollowee
 import com.example.chat.user.dto.UserResponse
 import com.example.chat.user.mapper.toResponse
 import com.example.chat.user.repository.UserRepository
 import org.bson.types.ObjectId
+import org.springframework.data.domain.Page
+import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -26,7 +29,10 @@ class FollowService(
      * counting the `follows` collection.
      */
     @Transactional
-    fun toggle(followerId: ObjectId, followeeId: ObjectId): FollowsResponse.ToggleFollowee {
+    fun toggle(followerId: String, followeeId: String): ToggleFollowee {
+        val followerId = ObjectId(followerId)
+        val followeeId = ObjectId(followeeId)
+
         if (followerId == followeeId) {
             throw ApiException.BadRequest("error.follow.cannot_follow_self")
         }
@@ -36,10 +42,10 @@ class FollowService(
 
         return if (followsRepository.existsByFollowerIdAndFolloweeId(followerId, followeeId)) {
             unfollow(followerId, followeeId)
-            FollowsResponse.ToggleFollowee(following = false)
+            ToggleFollowee(following = false)
         } else {
             follow(followerId, followeeId)
-            FollowsResponse.ToggleFollowee(following = true)
+            ToggleFollowee(following = true)
         }
     }
 
@@ -59,27 +65,25 @@ class FollowService(
 
     /** People who follow [userId] (the followers list), one page at a time. */
     @Transactional(readOnly = true)
-    fun followers(userId: ObjectId, pageable: Pageable): FollowsResponse.Follows {
-        val user = userRepository.findById(userId)
+    fun followers(userId: ObjectId, pageable: Pageable): ApiResponse<List<UserResponse>> {
+        userRepository.findById(userId)
             .orElseThrow { ApiException.NotFound("error.user.not_found") }
         val page = followsRepository.findByFolloweeId(userId, pageable)
-        return FollowsResponse.Follows(
-            count = user.followersCount,
-            data = usersInOrder(page.content.map { it.followerId }),
-        )
+        return ApiResponse.paged(page.mapInOrder { it.followerId })
     }
 
     /** People [userId] follows (the following list), one page at a time. */
     @Transactional(readOnly = true)
-    fun following(userId: ObjectId, pageable: Pageable): FollowsResponse.Follows {
-        val user = userRepository.findById(userId)
+    fun following(userId: ObjectId, pageable: Pageable): ApiResponse<List<UserResponse>> {
+        userRepository.findById(userId)
             .orElseThrow { ApiException.NotFound("error.user.not_found") }
         val page = followsRepository.findByFollowerId(userId, pageable)
-        return FollowsResponse.Follows(
-            count = user.followingCount,
-            data = usersInOrder(page.content.map { it.followeeId }),
-        )
+        return ApiResponse.paged(page.mapInOrder { it.followeeId })
     }
+
+    /** Maps a page of follow edges to the referenced users, batch-loaded and kept in page order. */
+    private fun Page<Follows>.mapInOrder(idSelector: (Follows) -> ObjectId): Page<UserResponse> =
+        PageImpl(usersInOrder(content.map(idSelector)), pageable, totalElements)
 
     /** Loads the given users in one query and returns them as responses, preserving [ids] order. */
     private fun usersInOrder(ids: List<ObjectId>): List<UserResponse> {

@@ -1,14 +1,9 @@
 package com.example.chat.follows.dto
 
 import com.example.chat.user.dto.UserResponse
+import org.springframework.data.domain.Page
 
-sealed class FollowsResponse {
-    data class Follows(
-        val count: Int,
-        val data: List<UserResponse>,
-    ) : FollowsResponse()
+data class ToggleFollowee(
+    val following: Boolean,
+)
 
-    data class ToggleFollowee(
-        val following: Boolean,
-    ) : FollowsResponse()
-}

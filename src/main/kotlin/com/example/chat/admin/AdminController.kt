@@ -28,7 +28,7 @@ class AdminController(
 
     @GetMapping("/users")
     fun listUsers(
-        @PageableDefault(size = 20, sort = ["email"], direction = Sort.Direction.ASC)
+        @PageableDefault(size = 20, sort = ["name"], direction = Sort.Direction.ASC)
         pageable: Pageable,
     ): ApiResponse<PageResponse<UserResponse>> =
         ApiResponse.ok(PageResponse.from(adminService.listUsers(pageable)) { it.toResponse() })

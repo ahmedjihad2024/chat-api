@@ -8,7 +8,7 @@ import com.example.chat.auth.dto.RegisterRequest
 import com.example.chat.auth.dto.ResendVerificationRequest
 import com.example.chat.auth.passwordReset.dto.ResetPasswordRequest
 import com.example.chat.auth.dto.TokenResponse
-import com.example.chat.auth.dto.VerifyEmailRequest
+import com.example.chat.auth.dto.VerifyPhoneRequest
 import com.example.chat.auth.passwordReset.dto.VerifyResetCodeRequest
 import com.example.chat.common.dto.ApiResponse
 import jakarta.validation.Valid
@@ -30,33 +30,33 @@ class AuthController(
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
     fun register(@Valid @RequestBody body: RegisterRequest): ApiResponse<AuthResponse.VerificationRequired> =
-        ApiResponse.ok(authService.register(body.name, body.email, body.password))
+        ApiResponse.ok(authService.register(body.name, body.phone, body.password, body.email))
 
     @PostMapping("/login")
     fun login(@Valid @RequestBody body: LoginRequest): ApiResponse<AuthResponse> =
-        ApiResponse.ok(authService.login(body.email, body.password))
+        ApiResponse.ok(authService.login(body.phone, body.password))
 
-    @PostMapping("/verify-email")
-    fun verifyEmail(@Valid @RequestBody body: VerifyEmailRequest): ApiResponse<AuthResponse.Authenticated> =
-        ApiResponse.ok(authService.verifyEmail(body.email, body.code))
+    @PostMapping("/verify-phone")
+    fun verifyPhone(@Valid @RequestBody body: VerifyPhoneRequest): ApiResponse<AuthResponse.Authenticated> =
+        ApiResponse.ok(authService.verifyPhone(body.phone, body.code))
 
-    @PostMapping("/verify-email/resend")
+    @PostMapping("/verify-phone/resend")
     fun resendVerification(@Valid @RequestBody body: ResendVerificationRequest): ApiResponse<AuthResponse.VerificationRequired> =
-        ApiResponse.ok(authService.resendVerificationCode(body.email))
+        ApiResponse.ok(authService.resendVerificationCode(body.phone))
 
     @PostMapping("/password-reset/request")
     fun forgotPassword(@Valid @RequestBody body: ForgotPasswordRequest): ApiResponse<AuthResponse.VerificationRequired> =
-        ApiResponse.ok(authService.forgotPassword(body.email))
+        ApiResponse.ok(authService.forgotPassword(body.phone))
 
     @PostMapping("/password-reset/verify")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     fun verifyResetCode(@Valid @RequestBody body: VerifyResetCodeRequest) {
-        authService.verifyResetCode(body.email, body.code)
+        authService.verifyResetCode(body.phone, body.code)
     }
 
     @PostMapping("/password-reset/confirm")
     fun resetPassword(@Valid @RequestBody body: ResetPasswordRequest): ApiResponse<AuthResponse.Authenticated> =
-        ApiResponse.ok(authService.resetPassword(body.email, body.code, body.newPassword))
+        ApiResponse.ok(authService.resetPassword(body.phone, body.code, body.newPassword))
 
     @PostMapping("/refresh")
     fun refresh(@Valid @RequestBody body: RefreshRequest): ApiResponse<TokenResponse> =

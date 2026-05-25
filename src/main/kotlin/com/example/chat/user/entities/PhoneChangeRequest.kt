@@ -6,11 +6,11 @@ import org.springframework.data.mongodb.core.index.Indexed
 import org.springframework.data.mongodb.core.mapping.Document
 import java.time.Instant
 
-@Document("email_change_requests")
-data class EmailChangeRequest(
+@Document("phone_change_requests")
+data class PhoneChangeRequest(
     @Id val id: ObjectId = ObjectId(),
     @Indexed(unique = true) val userId: ObjectId,
-    val newEmail: String,
+    val newPhone: String,
     val code: String,
     val createdAt: Instant = Instant.now(),
     @Indexed(expireAfter = "0s")

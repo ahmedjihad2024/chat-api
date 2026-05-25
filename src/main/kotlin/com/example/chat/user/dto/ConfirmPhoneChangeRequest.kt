@@ -3,8 +3,8 @@ package com.example.chat.user.dto
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Pattern
 
-data class ConfirmEmailChangeRequest(
+data class ConfirmPhoneChangeRequest(
     @field:NotBlank(message = "{validation.cannot_be_blank}")
-    @field:Pattern(regexp = "^\\d{5}$", message = "{validation.verification_code.pattern}")
+    @field:Pattern(regexp = "^\\d{5}\$", message = "{validation.verification_code.pattern}")
     val code: String,
 )

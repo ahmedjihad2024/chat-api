@@ -6,8 +6,8 @@ import org.springframework.data.mongodb.core.index.Indexed
 import org.springframework.data.mongodb.core.mapping.Document
 import java.time.Instant
 
-@Document("email_verification_codes")
-data class EmailVerificationCode(
+@Document("phone_verification_codes")
+data class PhoneVerificationCode(
     @Id val id: ObjectId = ObjectId(),
     @Indexed(unique = true) val userId: ObjectId,
     val code: String,

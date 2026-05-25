@@ -10,12 +10,12 @@ import java.util.concurrent.Executor
 @EnableAsync
 class AsyncConfig {
 
-    @Bean("mailExecutor")
-    fun mailExecutor(): Executor = ThreadPoolTaskExecutor().apply {
+    @Bean("smsExecutor")
+    fun smsExecutor(): Executor = ThreadPoolTaskExecutor().apply {
         corePoolSize = 2
         maxPoolSize = 8
         queueCapacity = 100
-        setThreadNamePrefix("mail-")
+        setThreadNamePrefix("sms-")
         initialize()
     }
 }

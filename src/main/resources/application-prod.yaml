@@ -30,8 +30,8 @@ logging:
     org.mongodb.driver: WARN
 
 app:
-  # Send real email in production.
-  mailer: smtp
+  # Send real SMS in production via Twilio.
+  sms: twilio
   cors:
     # Comma-separated list of allowed origins, injected at deploy time.
     allowed-origins: ${CORS_ALLOWED_ORIGINS:}

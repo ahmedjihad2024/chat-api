@@ -1,5 +1,8 @@
 package com.example.chat.auth.dto
 
+import com.example.chat.common.phone.E164PhoneDeserializer
+import com.example.chat.common.phone.ValidPhone
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import jakarta.validation.constraints.Email
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Pattern
@@ -11,8 +14,13 @@ data class RegisterRequest(
     val name: String,
 
     @field:NotBlank(message = "{validation.cannot_be_blank}")
+    @field:ValidPhone
+    @field:JsonDeserialize(using = E164PhoneDeserializer::class)
+    val phone: String,
+
+    // Optional contact email. When present it must look like an email; it is not verified.
     @field:Email(message = "{validation.invalid_email}")
-    val email: String,
+    val email: String? = null,
 
     @field:NotBlank(message = "{validation.cannot_be_blank}")
     @field:Size(min = 8, max = 100, message = "{validation.password.size}")

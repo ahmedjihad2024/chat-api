@@ -22,7 +22,7 @@ sealed class AuthResponse {
     ) : AuthResponse()
 
     data class VerificationRequired(
-        val email: String,
+        val phone: String,
         val message: String,
     ) : AuthResponse()
 }

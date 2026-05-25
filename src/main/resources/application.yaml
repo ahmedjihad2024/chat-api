@@ -28,21 +28,6 @@ spring:
     encoding: UTF-8
     # If a message key has no translation, return the key itself instead of throwing.
     use-code-as-default-message: true
-  mail:
-    # SMTP host/port — defaults work for Gmail; override per provider.
-    host: ${MAIL_HOST:smtp.gmail.com}
-    port: ${MAIL_PORT:587}
-    # Credentials are env-driven; never hard-code them.
-    username: ${MAIL_USERNAME:}
-    password: ${MAIL_PASSWORD:}
-    properties:
-      mail:
-        smtp:
-          auth: true
-          starttls:
-            enable: true
-            required: true
-        from: ${MAIL_FROM:no-reply@example.com}
   data:
     web:
       pageable:
@@ -57,6 +42,15 @@ jwt:
   # Base64-encoded HMAC secret used to sign/verify JWTs. Loaded from the env.
   secret: ${JWT_SECRET_BASE64}
 
+# Twilio SMS credentials — only required when app.sms=twilio (production).
+# All env-driven; never hard-code. Defaults are blank so the `log` backend
+# (dev/test) boots without any Twilio account.
+twilio:
+  account-sid: ${TWILIO_ACCOUNT_SID:}
+  auth-token: ${TWILIO_AUTH_TOKEN:}
+  # Sender number in E.164 format, e.g. +15551234567.
+  from-number: ${TWILIO_FROM_NUMBER:}
+
 
 app:
 
@@ -65,17 +59,13 @@ app:
     # Relative paths resolve against the process working directory.
     dir: ${AVATAR_DIR:uploads/avatars}
 
-  # Mailer backend: `log` writes the code to the application log (dev/test);
-  # `smtp` sends real email through spring.mail.* SMTP settings.
-  mailer: ${APP_MAILER:log}
-
-  # Default From address on outgoing mail. Overridden via env in production.
-  mail:
-    from: ${MAIL_FROM:no-reply@example.com}
+  # SMS backend: `log` writes the verification code to the application log
+  # (dev/test); `twilio` sends a real SMS through the Twilio settings below.
+  sms: ${APP_SMS:log}
 
   admin:
-    # Emails that get the ADMIN role on registration/login.
-    emails: mood27358@gmail.com
+    # Phone numbers (E.164) that get the ADMIN role on registration/login.
+    phones: ${ADMIN_PHONES:}
 
   rate-limit:
     # Defaults are tuned for production: strict enough to stop brute-force,

@@ -2,15 +2,15 @@ package com.example.chat.user
 
 import com.example.chat.auth.AuthService
 import com.example.chat.auth.dto.AuthResponse
-import com.example.chat.auth.mail.Mailer
-import com.example.chat.auth.mail.VERIFICATION_CODE_TTL_MINUTES
-import com.example.chat.auth.mail.VerificationCodeGenerator
+import com.example.chat.auth.sms.SmsSender
+import com.example.chat.auth.sms.VERIFICATION_CODE_TTL_MINUTES
+import com.example.chat.auth.sms.VerificationCodeGenerator
 import com.example.chat.common.extentions.sha256
 import com.example.chat.common.exception.ApiException
 import com.example.chat.common.extentions.tr
-import com.example.chat.user.entities.EmailChangeRequest
+import com.example.chat.user.entities.PhoneChangeRequest
 import com.example.chat.user.entities.User
-import com.example.chat.user.repository.EmailChangeRequestRepository
+import com.example.chat.user.repository.PhoneChangeRequestRepository
 import com.example.chat.user.repository.UserRepository
 import org.bson.types.ObjectId
 import org.springframework.security.crypto.password.PasswordEncoder
@@ -24,10 +24,10 @@ import java.time.temporal.ChronoUnit
 @Service
 class UserService(
     private val userRepository: UserRepository,
-    private val emailChangeRequestRepository: EmailChangeRequestRepository,
+    private val phoneChangeRequestRepository: PhoneChangeRequestRepository,
     private val passwordEncoder: PasswordEncoder,
     private val authService: AuthService,
-    private val mailer: Mailer,
+    private val smsSender: SmsSender,
     private val avatarStorage: AvatarStorage,
     private val verificationCodeGenerator: VerificationCodeGenerator,
 ) {
@@ -58,12 +58,25 @@ class UserService(
         return updated
     }
 
+    /** Updates the mutable profile fields. Each argument is applied only when non-null;
+     *  a null leaves that field unchanged. Email is optional/unverified and set directly,
+     *  with a sparse-unique check so two accounts can't share one. */
     @Transactional
-    fun updateName(id: String, name: String?): User {
+    fun updateProfile(id: String, name: String?, email: String?): User {
         val user = userRepository.findById(ObjectId(id))
             .orElseThrow { ApiException.NotFound("error.user.not_found") }
-        if (name == null) return user
-        return userRepository.save(user.copy(name = name))
+        if (email != null && email != user.email) {
+            val taken = userRepository.findByEmail(email)
+            if (taken != null && taken.id != user.id) {
+                throw ApiException.Conflict("error.auth.email_already_exists")
+            }
+        }
+        val updated = user.copy(
+            name = name ?: user.name,
+            email = email ?: user.email,
+        )
+        if (updated == user) return user
+        return userRepository.save(updated)
     }
 
     @Transactional
@@ -81,54 +94,55 @@ class UserService(
         return authService.reissueAfterPasswordChange(updated)
     }
 
+    /** Phone is the verified identifier, so changing it requires SMS confirmation of the new number. */
     @Transactional
-    fun changeEmail(id: String, newEmail: String): AuthResponse.VerificationRequired {
+    fun changePhone(id: String, newPhone: String): AuthResponse.VerificationRequired {
         val user = userRepository.findById(ObjectId(id))
             .orElseThrow { ApiException.NotFound("error.user.not_found") }
-        if (newEmail == user.email) {
-            throw ApiException.BadRequest("error.user.email_same_as_current")
+        if (newPhone == user.phone) {
+            throw ApiException.BadRequest("error.user.phone_same_as_current")
         }
-        val taken = userRepository.findByEmail(newEmail)
+        val taken = userRepository.findByPhone(newPhone)
         if (taken != null && taken.id != user.id) {
-            throw ApiException.Conflict("error.auth.email_already_exists")
+            throw ApiException.Conflict("error.auth.phone_already_exists")
         }
-        emailChangeRequestRepository.deleteByUserId(user.id)
+        phoneChangeRequestRepository.deleteByUserId(user.id)
         val plain = verificationCodeGenerator.generate()
-        emailChangeRequestRepository.save(
-            EmailChangeRequest(
+        phoneChangeRequestRepository.save(
+            PhoneChangeRequest(
                 userId = user.id,
-                newEmail = newEmail,
+                newPhone = newPhone,
                 code = plain.sha256(),
                 expiresAt = Instant.now().plus(VERIFICATION_CODE_TTL_MINUTES, ChronoUnit.MINUTES),
             ),
         )
-        mailer.sendVerificationCode(newEmail, plain)
+        smsSender.sendVerificationCode(newPhone, plain)
         return AuthResponse.VerificationRequired(
-            email = newEmail,
-            message = "error.user.email_change_code_sent".tr(),
+            phone = newPhone,
+            message = "error.user.phone_change_code_sent".tr(),
         )
     }
 
     @Transactional
-    fun verifyChangeEmailCode(id: String, code: String): User {
+    fun verifyChangePhoneCode(id: String, code: String): User {
         val user = userRepository.findById(ObjectId(id))
             .orElseThrow { ApiException.NotFound("error.user.not_found") }
-        val pending = emailChangeRequestRepository.findByUserId(user.id)
-            ?: throw ApiException.BadRequest("error.user.no_pending_email_change")
+        val pending = phoneChangeRequestRepository.findByUserId(user.id)
+            ?: throw ApiException.BadRequest("error.user.no_pending_phone_change")
         if (pending.expiresAt.isBefore(Instant.now())) {
-            emailChangeRequestRepository.delete(pending)
-            throw ApiException.BadRequest("error.user.email_change_code_expired")
+            phoneChangeRequestRepository.delete(pending)
+            throw ApiException.BadRequest("error.user.phone_change_code_expired")
         }
         if (pending.code != code.sha256()) {
-            throw ApiException.BadRequest("error.user.email_change_code_invalid")
+            throw ApiException.BadRequest("error.user.phone_change_code_invalid")
         }
-        val taken = userRepository.findByEmail(pending.newEmail)
+        val taken = userRepository.findByPhone(pending.newPhone)
         if (taken != null && taken.id != user.id) {
-            emailChangeRequestRepository.delete(pending)
-            throw ApiException.Conflict("error.auth.email_already_exists")
+            phoneChangeRequestRepository.delete(pending)
+            throw ApiException.Conflict("error.auth.phone_already_exists")
         }
-        val updated = userRepository.save(user.copy(email = pending.newEmail))
-        emailChangeRequestRepository.delete(pending)
+        val updated = userRepository.save(user.copy(phone = pending.newPhone))
+        phoneChangeRequestRepository.delete(pending)
         return updated
     }
 }

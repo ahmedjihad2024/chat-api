@@ -2,9 +2,9 @@ package com.example.chat.user
 
 import com.example.chat.auth.dto.AuthResponse
 import com.example.chat.common.dto.ApiResponse
-import com.example.chat.user.dto.ChangeEmailRequest
 import com.example.chat.user.dto.ChangePasswordRequest
-import com.example.chat.user.dto.ConfirmEmailChangeRequest
+import com.example.chat.user.dto.ChangePhoneRequest
+import com.example.chat.user.dto.ConfirmPhoneChangeRequest
 import com.example.chat.user.dto.UpdateRequest
 import com.example.chat.user.dto.UserResponse
 import com.example.chat.user.mapper.toResponse
@@ -34,11 +34,11 @@ class UserController(
     }
 
     @PatchMapping("/me")
-    fun updateName(
+    fun updateProfile(
         @Valid @RequestBody body: UpdateRequest,
         @AuthenticationPrincipal currentUserId: String,
     ): ApiResponse<UserResponse> {
-        val user = userService.updateName(currentUserId, body.name)
+        val user = userService.updateProfile(currentUserId, body.name, body.email)
         return ApiResponse.ok(user.toResponse(userService.avatarUrl(user)))
     }
 
@@ -59,20 +59,20 @@ class UserController(
         userService.changePassword(currentUserId, body.currentPassword, body.newPassword),
     )
 
-    @PostMapping("/me/change-email/request")
-    fun changeEmail(
-        @Valid @RequestBody body: ChangeEmailRequest,
+    @PostMapping("/me/change-phone/request")
+    fun changePhone(
+        @Valid @RequestBody body: ChangePhoneRequest,
         @AuthenticationPrincipal currentUserId: String,
     ): ApiResponse<AuthResponse.VerificationRequired> = ApiResponse.ok(
-        userService.changeEmail(currentUserId, body.newEmail),
+        userService.changePhone(currentUserId, body.newPhone),
     )
 
-    @PostMapping("/me/change-email/verify")
-    fun verifyChangeEmailCode(
-        @Valid @RequestBody body: ConfirmEmailChangeRequest,
+    @PostMapping("/me/change-phone/verify")
+    fun verifyChangePhoneCode(
+        @Valid @RequestBody body: ConfirmPhoneChangeRequest,
         @AuthenticationPrincipal currentUserId: String,
     ): ApiResponse<UserResponse> {
-        val user = userService.verifyChangeEmailCode(currentUserId, body.code)
+        val user = userService.verifyChangePhoneCode(currentUserId, body.code)
         return ApiResponse.ok(user.toResponse(userService.avatarUrl(user)))
     }
 }

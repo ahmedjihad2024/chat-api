@@ -6,8 +6,9 @@ import com.example.chat.user.dto.UserResponse
 fun User.toResponse(avatar: String? = null): UserResponse = UserResponse(
     id = id.toHexString(),
     name = name,
+    phone = phone,
     email = email,
     roles = roles.map { it.name }.toSet(),
-    emailVerified = emailVerified,
+    phoneVerified = phoneVerified,
     avatar = avatar,
 )

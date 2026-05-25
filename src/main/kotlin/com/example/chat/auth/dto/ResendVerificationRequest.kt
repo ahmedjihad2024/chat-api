@@ -1,10 +1,13 @@
 package com.example.chat.auth.dto
 
-import jakarta.validation.constraints.Email
+import com.example.chat.common.phone.E164PhoneDeserializer
+import com.example.chat.common.phone.ValidPhone
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import jakarta.validation.constraints.NotBlank
 
 data class ResendVerificationRequest(
     @field:NotBlank(message = "{validation.cannot_be_blank}")
-    @field:Email(message = "{validation.invalid_email}")
-    val email: String,
+    @field:ValidPhone
+    @field:JsonDeserialize(using = E164PhoneDeserializer::class)
+    val phone: String,
 )

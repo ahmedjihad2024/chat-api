@@ -26,6 +26,7 @@ import org.springframework.core.env.Environment
 @Configuration
 class OpenApiConfig(
     private val environment: Environment,
+    @Value($$"${spring.application.name:app}") private val appName: String,
     @Value($$"${server.port:8080}") private val serverPort: String,
     @Value($$"${server.servlet.context-path:}") private val contextPath: String,
     @Value($$"${springdoc.swagger-ui.path:/swagger-ui.html}") private val swaggerUiPath: String,
@@ -58,8 +59,8 @@ class OpenApiConfig(
         return OpenAPI()
             .info(
                 Info()
-                    .title("Notes API")
-                    .description("Notes API with JWT auth, i18n, and token revocation")
+                    .title("$appName API")
+                    .description("$appName API with JWT auth, i18n, and token revocation")
                     .version("0.0.1-SNAPSHOT"),
             )
             .addSecurityItem(SecurityRequirement().addList(schemeName))

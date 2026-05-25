@@ -1,6 +1,7 @@
 package com.example.chat.config
 
 import org.slf4j.LoggerFactory
+import org.springframework.dao.DataAccessException
 import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.event.EventListener
 import org.springframework.data.domain.Sort
@@ -23,56 +24,58 @@ class IndexInitializer(
     fun ensureIndexes() {
         log.info("Ensuring MongoDB indexes...")
 
-        // users: lookup by email is the hot path (login, register, email-change uniqueness check).
-        mongoTemplate.indexOps("users").createIndex(
-            Index().on("email", Sort.Direction.ASC).unique(),
-        )
-
-        // notes: getNotes() pages by ownerId; getOwned() filters by ownerId after _id lookup.
-        mongoTemplate.indexOps("notes").createIndex(
-            Index().on("ownerId", Sort.Direction.ASC),
-        )
+        // users:
+        // - phone is the login identifier and must be globally unique (login, register, phone-change check).
+        // - email is optional/unverified; sparse-unique so emails stay distinct but null is allowed.
+        ensureIndex("users", Index().on("phone", Sort.Direction.ASC).unique())
+        ensureIndex("users", Index().on("email", Sort.Direction.ASC).unique().sparse())
 
         // refresh_tokens:
         // - TTL on expiresAt so expired rows vanish automatically.
         // - Compound (userId, hashedToken) covers both findByUserIdAndHashedToken and
         //   deleteAllByUserId (prefix match on userId).
-        mongoTemplate.indexOps("refresh_tokens").createIndex(
-            Index().on("expiresAt", Sort.Direction.ASC).expire(0, TimeUnit.SECONDS),
-        )
-        mongoTemplate.indexOps("refresh_tokens").createIndex(
-            Index().on("userId", Sort.Direction.ASC).on("hashedToken", Sort.Direction.ASC),
-        )
+        ensureIndex("refresh_tokens", Index().on("expiresAt", Sort.Direction.ASC).expire(0, TimeUnit.SECONDS))
+        ensureIndex("refresh_tokens", Index().on("userId", Sort.Direction.ASC).on("hashedToken", Sort.Direction.ASC))
 
         // revoked_access_tokens: TTL only — jti is the @Id, so no extra index needed.
-        mongoTemplate.indexOps("revoked_access_tokens").createIndex(
-            Index().on("expiresAt", Sort.Direction.ASC).expire(0, TimeUnit.SECONDS),
-        )
+        ensureIndex("revoked_access_tokens", Index().on("expiresAt", Sort.Direction.ASC).expire(0, TimeUnit.SECONDS))
 
-        // email_verification_codes: one pending row per user, expires automatically.
-        mongoTemplate.indexOps("email_verification_codes").createIndex(
-            Index().on("userId", Sort.Direction.ASC).unique(),
-        )
-        mongoTemplate.indexOps("email_verification_codes").createIndex(
-            Index().on("expiresAt", Sort.Direction.ASC).expire(0, TimeUnit.SECONDS),
-        )
+        // phone_verification_codes: one pending row per user, expires automatically.
+        ensureIndex("phone_verification_codes", Index().on("userId", Sort.Direction.ASC).unique())
+        ensureIndex("phone_verification_codes", Index().on("expiresAt", Sort.Direction.ASC).expire(0, TimeUnit.SECONDS))
 
-        // email_change_requests: one pending row per user, expires automatically.
-        mongoTemplate.indexOps("email_change_requests").createIndex(
-            Index().on("userId", Sort.Direction.ASC).unique(),
-        )
-        mongoTemplate.indexOps("email_change_requests").createIndex(
-            Index().on("expiresAt", Sort.Direction.ASC).expire(0, TimeUnit.SECONDS),
-        )
+        // phone_change_requests: one pending row per user, expires automatically.
+        ensureIndex("phone_change_requests", Index().on("userId", Sort.Direction.ASC).unique())
+        ensureIndex("phone_change_requests", Index().on("expiresAt", Sort.Direction.ASC).expire(0, TimeUnit.SECONDS))
 
         // password_reset_codes: one pending row per user, expires automatically.
-        mongoTemplate.indexOps("password_reset_codes").createIndex(
-            Index().on("userId", Sort.Direction.ASC).unique(),
-        )
-        mongoTemplate.indexOps("password_reset_codes").createIndex(
-            Index().on("expiresAt", Sort.Direction.ASC).expire(0, TimeUnit.SECONDS),
-        )
+        ensureIndex("password_reset_codes", Index().on("userId", Sort.Direction.ASC).unique())
+        ensureIndex("password_reset_codes", Index().on("expiresAt", Sort.Direction.ASC).expire(0, TimeUnit.SECONDS))
 
         log.info("MongoDB indexes ensured.")
     }
+
+    /**
+     * Creates [index] on [collection], tolerating the case where an index with the same
+     * (auto-generated) name already exists with a *different* definition — e.g. after a
+     * schema change like email going from unique to unique+sparse. MongoDB rejects an
+     * in-place redefinition (IndexKeySpecsConflict / IndexOptionsConflict), so on a
+     * conflict we drop the stale index and recreate it. Any other failure is rethrown.
+     */
+    private fun ensureIndex(collection: String, index: Index) {
+        val ops = mongoTemplate.indexOps(collection)
+        try {
+            ops.createIndex(index)
+        } catch (ex: DataAccessException) {
+            if (ex.message?.contains("Conflict", ignoreCase = true) != true) throw ex
+            val name = defaultIndexName(index)
+            log.warn("Index '{}' on '{}' has a conflicting definition; dropping and recreating it.", name, collection)
+            ops.dropIndex(name)
+            ops.createIndex(index)
+        }
+    }
+
+    /** Reproduces MongoDB's default index name (e.g. {email:1} -> "email_1", compound -> "a_1_b_-1"). */
+    private fun defaultIndexName(index: Index): String =
+        index.indexKeys.entries.joinToString("_") { "${it.key}_${it.value}" }
 }

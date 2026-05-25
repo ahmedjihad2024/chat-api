@@ -1,0 +1,90 @@
+package com.example.chat.follows
+
+import com.example.chat.common.exception.ApiException
+import com.example.chat.follows.dto.FollowsResponse
+import com.example.chat.user.dto.UserResponse
+import com.example.chat.user.mapper.toResponse
+import com.example.chat.user.repository.UserRepository
+import org.bson.types.ObjectId
+import org.springframework.data.domain.Pageable
+import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
+
+@Service
+class FollowService(
+    private val followsRepository: FollowsRepository,
+    private val userRepository: UserRepository,
+) {
+
+    /**
+     * One idempotent toggle: follows the target if not already following, otherwise unfollows.
+     * Returns the resulting state (`following = true` means you now follow them).
+     *
+     * The `follows` edge is the source of truth and is written first; the denormalized User
+     * counters are then adjusted with atomic `$inc` (race-safe — concurrent follows can't lose
+     * an update). Counters are derived data, so if they ever drift they can be rebuilt by
+     * counting the `follows` collection.
+     */
+    @Transactional
+    fun toggle(followerId: ObjectId, followeeId: ObjectId): FollowsResponse.ToggleFollowee {
+        if (followerId == followeeId) {
+            throw ApiException.BadRequest("error.follow.cannot_follow_self")
+        }
+        if (!userRepository.existsById(followeeId)) {
+            throw ApiException.NotFound("error.user.not_found")
+        }
+
+        return if (followsRepository.existsByFollowerIdAndFolloweeId(followerId, followeeId)) {
+            unfollow(followerId, followeeId)
+            FollowsResponse.ToggleFollowee(following = false)
+        } else {
+            follow(followerId, followeeId)
+            FollowsResponse.ToggleFollowee(following = true)
+        }
+    }
+
+    private fun follow(followerId: ObjectId, followeeId: ObjectId) {
+        // Edge first (authoritative); the unique compound index blocks accidental duplicates.
+        followsRepository.save(Follows(followerId = followerId, followeeId = followeeId))
+        userRepository.incrementFollowersCount(followeeId)
+        userRepository.incrementFollowingCount(followerId)
+    }
+
+    private fun unfollow(followerId: ObjectId, followeeId: ObjectId) {
+        val removed = followsRepository.deleteByFollowerIdAndFolloweeId(followerId, followeeId)
+        if (removed == 0L) return // nothing was there — don't decrement below the real total
+        userRepository.decrementFollowersCount(followeeId)
+        userRepository.decrementFollowingCount(followerId)
+    }
+
+    /** People who follow [userId] (the followers list), one page at a time. */
+    @Transactional(readOnly = true)
+    fun followers(userId: ObjectId, pageable: Pageable): FollowsResponse.Follows {
+        val user = userRepository.findById(userId)
+            .orElseThrow { ApiException.NotFound("error.user.not_found") }
+        val page = followsRepository.findByFolloweeId(userId, pageable)
+        return FollowsResponse.Follows(
+            count = user.followersCount,
+            data = usersInOrder(page.content.map { it.followerId }),
+        )
+    }
+
+    /** People [userId] follows (the following list), one page at a time. */
+    @Transactional(readOnly = true)
+    fun following(userId: ObjectId, pageable: Pageable): FollowsResponse.Follows {
+        val user = userRepository.findById(userId)
+            .orElseThrow { ApiException.NotFound("error.user.not_found") }
+        val page = followsRepository.findByFollowerId(userId, pageable)
+        return FollowsResponse.Follows(
+            count = user.followingCount,
+            data = usersInOrder(page.content.map { it.followeeId }),
+        )
+    }
+
+    /** Loads the given users in one query and returns them as responses, preserving [ids] order. */
+    private fun usersInOrder(ids: List<ObjectId>): List<UserResponse> {
+        if (ids.isEmpty()) return emptyList()
+        val byId = userRepository.findAllById(ids).associateBy { it.id }
+        return ids.mapNotNull { id -> byId[id]?.toResponse() }
+    }
+}

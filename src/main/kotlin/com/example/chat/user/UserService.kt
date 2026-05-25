@@ -8,8 +8,9 @@ import com.example.chat.auth.sms.VerificationCodeGenerator
 import com.example.chat.common.extentions.sha256
 import com.example.chat.common.exception.ApiException
 import com.example.chat.common.extentions.tr
+import com.example.chat.user.dto.UserResponse
 import com.example.chat.user.entities.PhoneChangeRequest
-import com.example.chat.user.entities.User
+import com.example.chat.user.mapper.toResponse
 import com.example.chat.user.repository.PhoneChangeRequestRepository
 import com.example.chat.user.repository.UserRepository
 import org.bson.types.ObjectId
@@ -17,7 +18,6 @@ import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.multipart.MultipartFile
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
@@ -31,23 +31,14 @@ class UserService(
     private val avatarStorage: AvatarStorage,
     private val verificationCodeGenerator: VerificationCodeGenerator,
 ) {
-    fun me(id: String): User {
-        return userRepository.findById(ObjectId(id))
+    fun me(id: String): UserResponse {
+        val user = userRepository.findById(ObjectId(id))
             .orElseThrow { ApiException.NotFound("error.user.not_found") }
+        return user.toResponse()
     }
 
-    /** Absolute public URL the frontend can use in `<img src>` to fetch the user's avatar,
-     *  or null when unset. Host/scheme are derived from the current request, and the
-     *  filename is a fresh UUID per upload, so the URL self-busts caches. */
-    fun avatarUrl(user: User): String? =
-        user.avatarFilename?.let {
-            ServletUriComponentsBuilder.fromCurrentContextPath()
-                .path("/avatars/$it")
-                .toUriString()
-        }
-
     @Transactional
-    fun uploadAvatar(id: String, file: MultipartFile): User {
+    fun uploadAvatar(id: String, file: MultipartFile): UserResponse {
         val user = userRepository.findById(ObjectId(id))
             .orElseThrow { ApiException.NotFound("error.user.not_found") }
         val previousFilename = user.avatarFilename
@@ -55,14 +46,14 @@ class UserService(
         val updated = userRepository.save(user.copy(avatarFilename = newFilename))
         // Drop the old file only after the pointer is safely persisted, to avoid orphaning the live avatar.
         previousFilename?.let { avatarStorage.delete(it) }
-        return updated
+        return updated.toResponse()
     }
 
     /** Updates the mutable profile fields. Each argument is applied only when non-null;
      *  a null leaves that field unchanged. Email is optional/unverified and set directly,
      *  with a sparse-unique check so two accounts can't share one. */
     @Transactional
-    fun updateProfile(id: String, name: String?, email: String?): User {
+    fun updateProfile(id: String, name: String?, email: String?): UserResponse {
         val user = userRepository.findById(ObjectId(id))
             .orElseThrow { ApiException.NotFound("error.user.not_found") }
         if (email != null && email != user.email) {
@@ -75,8 +66,8 @@ class UserService(
             name = name ?: user.name,
             email = email ?: user.email,
         )
-        if (updated == user) return user
-        return userRepository.save(updated)
+        if (updated == user) return user.toResponse()
+        return userRepository.save(updated).toResponse()
     }
 
     @Transactional
@@ -124,7 +115,7 @@ class UserService(
     }
 
     @Transactional
-    fun verifyChangePhoneCode(id: String, code: String): User {
+    fun verifyChangePhoneCode(id: String, code: String): UserResponse {
         val user = userRepository.findById(ObjectId(id))
             .orElseThrow { ApiException.NotFound("error.user.not_found") }
         val pending = phoneChangeRequestRepository.findByUserId(user.id)
@@ -143,6 +134,6 @@ class UserService(
         }
         val updated = userRepository.save(user.copy(phone = pending.newPhone))
         phoneChangeRequestRepository.delete(pending)
-        return updated
+        return updated.toResponse()
     }
 }

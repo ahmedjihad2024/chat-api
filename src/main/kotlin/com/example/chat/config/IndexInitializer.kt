@@ -52,6 +52,9 @@ class IndexInitializer(
         ensureIndex("password_reset_codes", Index().on("userId", Sort.Direction.ASC).unique())
         ensureIndex("password_reset_codes", Index().on("expiresAt", Sort.Direction.ASC).expire(0, TimeUnit.SECONDS))
 
+        ensureIndex("follows", Index().on("followerId", Sort.Direction.ASC).on("followeeId", Sort.Direction.ASC).unique())
+        ensureIndex("follows", Index().on("followeeId", Sort.Direction.ASC).on("followerId", Sort.Direction.ASC))
+
         log.info("MongoDB indexes ensured.")
     }
 

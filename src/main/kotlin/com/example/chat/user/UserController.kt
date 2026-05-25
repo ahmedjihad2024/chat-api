@@ -7,7 +7,6 @@ import com.example.chat.user.dto.ChangePhoneRequest
 import com.example.chat.user.dto.ConfirmPhoneChangeRequest
 import com.example.chat.user.dto.UpdateRequest
 import com.example.chat.user.dto.UserResponse
-import com.example.chat.user.mapper.toResponse
 import jakarta.validation.Valid
 import org.springframework.http.MediaType
 import org.springframework.security.core.annotation.AuthenticationPrincipal
@@ -28,28 +27,22 @@ class UserController(
     @GetMapping("/me")
     fun me(
         @AuthenticationPrincipal currentUserId: String,
-    ): ApiResponse<UserResponse> {
-        val user = userService.me(currentUserId)
-        return ApiResponse.ok(user.toResponse(userService.avatarUrl(user)))
-    }
+    ): ApiResponse<UserResponse> =
+        ApiResponse.ok(userService.me(currentUserId))
 
     @PatchMapping("/me")
     fun updateProfile(
         @Valid @RequestBody body: UpdateRequest,
         @AuthenticationPrincipal currentUserId: String,
-    ): ApiResponse<UserResponse> {
-        val user = userService.updateProfile(currentUserId, body.name, body.email)
-        return ApiResponse.ok(user.toResponse(userService.avatarUrl(user)))
-    }
+    ): ApiResponse<UserResponse> =
+        ApiResponse.ok(userService.updateProfile(currentUserId, body.name, body.email))
 
     @PostMapping("/me/avatar", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
     fun uploadAvatar(
         @RequestParam("file") file: MultipartFile,
         @AuthenticationPrincipal currentUserId: String,
-    ): ApiResponse<UserResponse> {
-        val user = userService.uploadAvatar(currentUserId, file)
-        return ApiResponse.ok(user.toResponse(userService.avatarUrl(user)))
-    }
+    ): ApiResponse<UserResponse> =
+        ApiResponse.ok(userService.uploadAvatar(currentUserId, file))
 
     @PostMapping("/me/change-password")
     fun changePassword(
@@ -71,8 +64,6 @@ class UserController(
     fun verifyChangePhoneCode(
         @Valid @RequestBody body: ConfirmPhoneChangeRequest,
         @AuthenticationPrincipal currentUserId: String,
-    ): ApiResponse<UserResponse> {
-        val user = userService.verifyChangePhoneCode(currentUserId, body.code)
-        return ApiResponse.ok(user.toResponse(userService.avatarUrl(user)))
-    }
+    ): ApiResponse<UserResponse> =
+        ApiResponse.ok(userService.verifyChangePhoneCode(currentUserId, body.code))
 }

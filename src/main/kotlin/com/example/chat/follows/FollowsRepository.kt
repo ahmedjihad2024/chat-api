@@ -23,4 +23,7 @@ interface FollowsRepository: MongoRepository<Follows, ObjectId> {
     fun countByFollowerId(followerId: ObjectId): Long   // how many I follow
     fun countByFolloweeId(followeeId: ObjectId): Long   // how many follow me
 
+    // Batch relationship lookups against a set of users (for computing FollowRelation in a list).
+    fun findByFollowerIdAndFolloweeIdIn(followerId: ObjectId, followeeIds: Collection<ObjectId>): List<Follows>
+    fun findByFolloweeIdAndFollowerIdIn(followeeId: ObjectId, followerIds: Collection<ObjectId>): List<Follows>
 }

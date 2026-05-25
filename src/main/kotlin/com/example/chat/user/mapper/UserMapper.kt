@@ -1,10 +1,11 @@
 package com.example.chat.user.mapper
 
 import com.example.chat.common.extentions.toAvatarUrl
+import com.example.chat.follows.dto.FollowRelation
 import com.example.chat.user.dto.UserResponse
 import com.example.chat.user.entities.User
 
-fun User.toResponse(): UserResponse = UserResponse(
+fun User.toResponse(relation: FollowRelation? = null): UserResponse = UserResponse(
     id = id.toHexString(),
     name = name,
     phone = phone,
@@ -14,4 +15,5 @@ fun User.toResponse(): UserResponse = UserResponse(
     avatar = avatarFilename.toAvatarUrl(),
     followersCount = followersCount,
     followingCount = followingCount,
+    relation = relation,
 )

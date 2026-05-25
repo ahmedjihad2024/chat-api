@@ -2,6 +2,7 @@ package com.example.chat.follows
 
 import com.example.chat.common.dto.ApiResponse
 import com.example.chat.common.exception.ApiException
+import com.example.chat.follows.dto.FollowRelation
 import com.example.chat.follows.dto.ToggleFollowee
 import com.example.chat.user.dto.UserResponse
 import com.example.chat.user.mapper.toResponse
@@ -79,6 +80,29 @@ class FollowService(
             .orElseThrow { ApiException.NotFound("error.user.not_found") }
         val page = followsRepository.findByFollowerId(userId, pageable)
         return ApiResponse.paged(page.mapInOrder { it.followeeId })
+    }
+
+    /**
+     * The [FollowRelation] from [currentUserId] to each of [targetIds], computed in two batch
+     * queries. Ids with no edge in either direction map to [FollowRelation.NONE].
+     */
+    @Transactional(readOnly = true)
+    fun relationsFrom(currentUserId: ObjectId, targetIds: List<ObjectId>): Map<ObjectId, FollowRelation> {
+        if (targetIds.isEmpty()) return emptyMap()
+        val iFollow = followsRepository.findByFollowerIdAndFolloweeIdIn(currentUserId, targetIds)
+            .mapTo(HashSet()) { it.followeeId }
+        val followMe = followsRepository.findByFolloweeIdAndFollowerIdIn(currentUserId, targetIds)
+            .mapTo(HashSet()) { it.followerId }
+        return targetIds.associateWith { id ->
+            val outgoing = id in iFollow
+            val incoming = id in followMe
+            when {
+                outgoing && incoming -> FollowRelation.FRIEND
+                outgoing -> FollowRelation.FOLLOWING
+                incoming -> FollowRelation.FOLLOWER
+                else -> FollowRelation.NONE
+            }
+        }
     }
 
     /** Maps a page of follow edges to the referenced users, batch-loaded and kept in page order. */

@@ -8,6 +8,9 @@ import com.example.chat.user.dto.ConfirmPhoneChangeRequest
 import com.example.chat.user.dto.UpdateRequest
 import com.example.chat.user.dto.UserResponse
 import jakarta.validation.Valid
+import org.springframework.data.domain.Pageable
+import org.springframework.data.domain.Sort
+import org.springframework.data.web.PageableDefault
 import org.springframework.http.MediaType
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.GetMapping
@@ -28,42 +31,48 @@ class UserController(
     fun me(
         @AuthenticationPrincipal currentUserId: String,
     ): ApiResponse<UserResponse> =
-        ApiResponse.ok(userService.me(currentUserId))
+        userService.me(currentUserId)
+
+    @GetMapping("/search")
+    fun search(
+        @RequestParam q: String,
+        @AuthenticationPrincipal currentUserId: String,
+        @PageableDefault(size = 20, sort = ["name"], direction = Sort.Direction.ASC) pageable: Pageable,
+    ): ApiResponse<List<UserResponse>> =
+        userService.search(currentUserId, q, pageable)
 
     @PatchMapping("/me")
     fun updateProfile(
         @Valid @RequestBody body: UpdateRequest,
         @AuthenticationPrincipal currentUserId: String,
     ): ApiResponse<UserResponse> =
-        ApiResponse.ok(userService.updateProfile(currentUserId, body.name, body.email))
+        userService.updateProfile(currentUserId, body.name, body.email)
 
     @PostMapping("/me/avatar", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
     fun uploadAvatar(
         @RequestParam("file") file: MultipartFile,
         @AuthenticationPrincipal currentUserId: String,
     ): ApiResponse<UserResponse> =
-        ApiResponse.ok(userService.uploadAvatar(currentUserId, file))
+        userService.uploadAvatar(currentUserId, file)
 
     @PostMapping("/me/change-password")
     fun changePassword(
         @Valid @RequestBody body: ChangePasswordRequest,
         @AuthenticationPrincipal currentUserId: String,
-    ): ApiResponse<AuthResponse.Authenticated> = ApiResponse.ok(
-        userService.changePassword(currentUserId, body.currentPassword, body.newPassword),
-    )
+    ): ApiResponse<AuthResponse.Authenticated> =
+        userService.changePassword(currentUserId, body.currentPassword, body.newPassword)
 
     @PostMapping("/me/change-phone/request")
     fun changePhone(
         @Valid @RequestBody body: ChangePhoneRequest,
         @AuthenticationPrincipal currentUserId: String,
-    ): ApiResponse<AuthResponse.VerificationRequired> = ApiResponse.ok(
-        userService.changePhone(currentUserId, body.newPhone),
-    )
+    ): ApiResponse<AuthResponse.VerificationRequired> =
+        userService.changePhone(currentUserId, body.newPhone)
 
     @PostMapping("/me/change-phone/verify")
     fun verifyChangePhoneCode(
         @Valid @RequestBody body: ConfirmPhoneChangeRequest,
         @AuthenticationPrincipal currentUserId: String,
     ): ApiResponse<UserResponse> =
-        ApiResponse.ok(userService.verifyChangePhoneCode(currentUserId, body.code))
+        userService.verifyChangePhoneCode(currentUserId, body.code)
 }

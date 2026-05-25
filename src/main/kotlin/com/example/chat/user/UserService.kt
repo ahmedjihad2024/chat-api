@@ -5,15 +5,18 @@ import com.example.chat.auth.dto.AuthResponse
 import com.example.chat.auth.sms.SmsSender
 import com.example.chat.auth.sms.VERIFICATION_CODE_TTL_MINUTES
 import com.example.chat.auth.sms.VerificationCodeGenerator
+import com.example.chat.common.dto.ApiResponse
 import com.example.chat.common.extentions.sha256
 import com.example.chat.common.exception.ApiException
 import com.example.chat.common.extentions.tr
+import com.example.chat.follows.FollowService
 import com.example.chat.user.dto.UserResponse
 import com.example.chat.user.entities.PhoneChangeRequest
 import com.example.chat.user.mapper.toResponse
 import com.example.chat.user.repository.PhoneChangeRequestRepository
 import com.example.chat.user.repository.UserRepository
 import org.bson.types.ObjectId
+import org.springframework.data.domain.Pageable
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -30,15 +33,29 @@ class UserService(
     private val smsSender: SmsSender,
     private val avatarStorage: AvatarStorage,
     private val verificationCodeGenerator: VerificationCodeGenerator,
+    private val followService: FollowService,
 ) {
-    fun me(id: String): UserResponse {
+    fun me(id: String): ApiResponse<UserResponse> {
         val user = userRepository.findById(ObjectId(id))
             .orElseThrow { ApiException.NotFound("error.user.not_found") }
-        return user.toResponse()
+        return ApiResponse.ok(user.toResponse())
+    }
+
+    /**
+     * Searches users by a case-insensitive partial match on name or email, and tags each result
+     * with the [com.example.chat.follows.dto.FollowRelation] to [currentUserId]. The query is
+     * regex-escaped so user input is treated as a literal substring.
+     */
+    fun search(currentUserId: String, query: String, pageable: Pageable): ApiResponse<List<UserResponse>> {
+        val me = ObjectId(currentUserId)
+        val escaped = Regex.escape(query.trim())
+        val page = userRepository.searchByNameOrEmail(escaped, pageable)
+        val relations = followService.relationsFrom(me, page.content.map { it.id })
+        return ApiResponse.paged(page.map { it.toResponse(relations[it.id]) })
     }
 
     @Transactional
-    fun uploadAvatar(id: String, file: MultipartFile): UserResponse {
+    fun uploadAvatar(id: String, file: MultipartFile): ApiResponse<UserResponse> {
         val user = userRepository.findById(ObjectId(id))
             .orElseThrow { ApiException.NotFound("error.user.not_found") }
         val previousFilename = user.avatarFilename
@@ -46,14 +63,14 @@ class UserService(
         val updated = userRepository.save(user.copy(avatarFilename = newFilename))
         // Drop the old file only after the pointer is safely persisted, to avoid orphaning the live avatar.
         previousFilename?.let { avatarStorage.delete(it) }
-        return updated.toResponse()
+        return ApiResponse.ok(updated.toResponse())
     }
 
     /** Updates the mutable profile fields. Each argument is applied only when non-null;
      *  a null leaves that field unchanged. Email is optional/unverified and set directly,
      *  with a sparse-unique check so two accounts can't share one. */
     @Transactional
-    fun updateProfile(id: String, name: String?, email: String?): UserResponse {
+    fun updateProfile(id: String, name: String?, email: String?): ApiResponse<UserResponse> {
         val user = userRepository.findById(ObjectId(id))
             .orElseThrow { ApiException.NotFound("error.user.not_found") }
         if (email != null && email != user.email) {
@@ -66,12 +83,12 @@ class UserService(
             name = name ?: user.name,
             email = email ?: user.email,
         )
-        if (updated == user) return user.toResponse()
-        return userRepository.save(updated).toResponse()
+        if (updated == user) return ApiResponse.ok(user.toResponse())
+        return ApiResponse.ok(userRepository.save(updated).toResponse())
     }
 
     @Transactional
-    fun changePassword(id: String, currentPassword: String, newPassword: String): AuthResponse.Authenticated {
+    fun changePassword(id: String, currentPassword: String, newPassword: String): ApiResponse<AuthResponse.Authenticated> {
         val user = userRepository.findById(ObjectId(id))
             .orElseThrow { ApiException.NotFound("error.user.not_found") }
         val stored = user.hashedPassword
@@ -82,12 +99,12 @@ class UserService(
         val updated = userRepository.save(
             user.copy(hashedPassword = passwordEncoder.encode(newPassword)),
         )
-        return authService.reissueAfterPasswordChange(updated)
+        return ApiResponse.ok(authService.reissueAfterPasswordChange(updated))
     }
 
     /** Phone is the verified identifier, so changing it requires SMS confirmation of the new number. */
     @Transactional
-    fun changePhone(id: String, newPhone: String): AuthResponse.VerificationRequired {
+    fun changePhone(id: String, newPhone: String): ApiResponse<AuthResponse.VerificationRequired> {
         val user = userRepository.findById(ObjectId(id))
             .orElseThrow { ApiException.NotFound("error.user.not_found") }
         if (newPhone == user.phone) {
@@ -108,14 +125,16 @@ class UserService(
             ),
         )
         smsSender.sendVerificationCode(newPhone, plain)
-        return AuthResponse.VerificationRequired(
-            phone = newPhone,
-            message = "error.user.phone_change_code_sent".tr(),
+        return ApiResponse.ok(
+            AuthResponse.VerificationRequired(
+                phone = newPhone,
+                message = "error.user.phone_change_code_sent".tr(),
+            ),
         )
     }
 
     @Transactional
-    fun verifyChangePhoneCode(id: String, code: String): UserResponse {
+    fun verifyChangePhoneCode(id: String, code: String): ApiResponse<UserResponse> {
         val user = userRepository.findById(ObjectId(id))
             .orElseThrow { ApiException.NotFound("error.user.not_found") }
         val pending = phoneChangeRequestRepository.findByUserId(user.id)
@@ -134,6 +153,6 @@ class UserService(
         }
         val updated = userRepository.save(user.copy(phone = pending.newPhone))
         phoneChangeRequestRepository.delete(pending)
-        return updated.toResponse()
+        return ApiResponse.ok(updated.toResponse())
     }
 }

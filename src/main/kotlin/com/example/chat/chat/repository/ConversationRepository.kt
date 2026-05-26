@@ -11,5 +11,8 @@ interface ConversationRepository : MongoRepository<Conversation, ObjectId>, Conv
     /** My conversations, paged and (via the caller's Pageable) sorted by `lastMessageAt` desc. */
     fun findByParticipantIds(participantId: ObjectId, pageable: Pageable): Page<Conversation>
 
+    /** All of a user's conversations (unpaged) — used to fan presence out to their chat partners. */
+    fun findByParticipantIds(participantId: ObjectId): List<Conversation>
+
     fun findByPairKey(pairKey: String): Conversation?
 }

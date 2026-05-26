@@ -1,4 +1,4 @@
-package com.example.chat.config
+package com.example.chat.config.socket
 
 import com.example.chat.auth.repository.RevokedAccessTokenRepository
 import com.example.chat.security.jwt.JwtService

@@ -13,4 +13,5 @@ data class ConversationResponse(
     val lastMessageAt: Instant,
     val lastMessagePreview: String?,
     val unread: Int,
+    val online: Boolean,
 )

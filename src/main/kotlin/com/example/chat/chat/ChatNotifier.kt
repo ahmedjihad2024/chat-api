@@ -2,6 +2,7 @@ package com.example.chat.chat
 
 import com.example.chat.chat.dto.InboxEvent
 import com.example.chat.chat.dto.MessageResponse
+import com.example.chat.chat.dto.PresenceEvent
 import com.example.chat.chat.dto.ReadReceipt
 import org.springframework.messaging.simp.SimpMessagingTemplate
 import org.springframework.stereotype.Component
@@ -29,5 +30,10 @@ class ChatNotifier(
     /** Tell [authorUserId] that their messages in a thread were read (`/user/queue/read`). */
     fun readReceipt(authorUserId: String, receipt: ReadReceipt) {
         messagingTemplate.convertAndSendToUser(authorUserId, "/queue/read", receipt)
+    }
+
+    /** Tell [recipientUserId] that a chat partner crossed the online/offline edge (`/user/queue/inbox`). */
+    fun presence(recipientUserId: String, event: PresenceEvent) {
+        messagingTemplate.convertAndSendToUser(recipientUserId, "/queue/inbox", event)
     }
 }

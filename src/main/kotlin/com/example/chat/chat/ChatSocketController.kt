@@ -26,7 +26,7 @@ import java.security.Principal
  *
  * If a participant is offline the pushes go nowhere — the message is persisted and picked up from
  * history. Presence (who is "viewing") is tracked from SUBSCRIBE frames, not here; see
- * [com.example.chat.config.WebSocketPresenceListener].
+ * [com.example.chat.config.socket.WebSocketPresenceListener].
  */
 @Controller
 class ChatSocketController(

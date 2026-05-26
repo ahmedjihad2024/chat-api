@@ -4,6 +4,7 @@ import com.example.chat.chat.dto.ConversationReadStatus
 import com.example.chat.chat.dto.ConversationResponse
 import com.example.chat.chat.dto.InboxEvent
 import com.example.chat.chat.dto.MessageResponse
+import com.example.chat.chat.dto.PresenceEvent
 import com.example.chat.chat.dto.ReadReceipt
 import com.example.chat.chat.dto.SentMessage
 import com.example.chat.chat.dto.SideReadStatus
@@ -29,6 +30,7 @@ class ChatService(
     private val messageRepository: MessageRepository,
     private val userRepository: UserRepository,
     private val activeConversations: ActiveConversationRegistry,
+    private val presence: PresenceRegistry,
     private val chatNotifier: ChatNotifier,
 ) {
 
@@ -50,7 +52,8 @@ class ChatService(
             .orElseThrow { ApiException.NotFound("error.user.not_found") }
 
         val conversation = conversationRepository.findOrCreate(me, other)
-        return ApiResponse.ok(conversation.toResponse(currentUserId, otherUser.toResponse()))
+        val online = presence.isOnline(otherUserId)
+        return ApiResponse.ok(conversation.toResponse(currentUserId, otherUser.toResponse(), online))
     }
 
     /** My conversations, paged, newest-active first (sort comes from the caller's Pageable). */
@@ -63,10 +66,23 @@ class ChatService(
         val usersById = userRepository.findAllById(otherIds).associateBy { it.id }
         val responses = page.content.mapNotNull { convo ->
             usersById[convo.otherParticipant(me)]?.let { other ->
-                convo.toResponse(currentUserId, other.toResponse())
+                val online = presence.isOnline(other.id.toHexString())
+                convo.toResponse(currentUserId, other.toResponse(), online)
             }
         }
         return ApiResponse.paged(PageImpl(responses, pageable, page.totalElements))
+    }
+
+    /**
+     * A user just crossed the online/offline edge: push a [PresenceEvent] to the inbox of every
+     * partner they have a conversation with, so only people who actually chat with them are told.
+     * Best-effort and per-instance (mirrors the rest of the live layer).
+     */
+    fun notifyPresence(userId: String, online: Boolean) {
+        val me = ObjectId(userId)
+        val event = PresenceEvent(userId, online, Instant.now())
+        conversationRepository.findByParticipantIds(me)
+            .forEach { convo -> chatNotifier.presence(convo.otherParticipant(me).toHexString(), event) }
     }
 
     /**

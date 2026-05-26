@@ -1,7 +1,9 @@
-package com.example.chat.config
+package com.example.chat.config.socket
 
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler
 import org.springframework.messaging.simp.config.ChannelRegistration
 import org.springframework.messaging.simp.config.MessageBrokerRegistry
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker
@@ -37,9 +39,21 @@ class WebSocketConfig(
 
     override fun configureMessageBroker(registry: MessageBrokerRegistry) {
         registry.enableSimpleBroker("/topic", "/queue")
+            // [server-send, client-expected] in ms; a dead session is reaped in ~2× the interval.
+            .setHeartbeatValue(longArrayOf(10_000, 10_000))
+            .setTaskScheduler(heartbeatScheduler())
         registry.setApplicationDestinationPrefixes("/app")
         registry.setUserDestinationPrefix("/user")
     }
+
+    /** Drives broker heartbeats; required once [setHeartbeatValue] is set, or startup fails. */
+    @Bean
+    fun heartbeatScheduler(): ThreadPoolTaskScheduler =
+        ThreadPoolTaskScheduler().apply {
+            poolSize = 1
+            setThreadNamePrefix("ws-heartbeat-")
+            initialize()
+        }
 
     override fun configureClientInboundChannel(registration: ChannelRegistration) {
         registration.interceptors(authInterceptor)

@@ -9,7 +9,7 @@ import java.util.concurrent.ConcurrentHashMap
  * (→ inbox metadata only, stays unread).
  *
  * Presence is derived from STOMP SUBSCRIBE/UNSUBSCRIBE frames server-side (see
- * [com.example.chat.config.WebSocketPresenceListener]), never from a client-sent message, so a
+ * [com.example.chat.config.socket.WebSocketPresenceListener]), never from a client-sent message, so a
  * client can't read live without being seen: subscribing to a conversation *is* how it receives it.
  *
  * A user may view from several devices; a thread counts as viewed while any of their subscriptions

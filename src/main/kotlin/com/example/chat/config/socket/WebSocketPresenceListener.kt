@@ -1,31 +1,46 @@
-package com.example.chat.config
+package com.example.chat.config.socket
 
 import com.example.chat.chat.ActiveConversationRegistry
 import com.example.chat.chat.ChatService
+import com.example.chat.chat.PresenceRegistry
 import org.slf4j.LoggerFactory
 import org.springframework.context.event.EventListener
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor
 import org.springframework.stereotype.Component
+import org.springframework.web.socket.messaging.SessionConnectedEvent
 import org.springframework.web.socket.messaging.SessionDisconnectEvent
 import org.springframework.web.socket.messaging.SessionSubscribeEvent
 import org.springframework.web.socket.messaging.SessionUnsubscribeEvent
 
 /**
- * Derives "who is viewing which conversation" from STOMP frames, server-side:
+ * Derives presence from STOMP frames, server-side:
+ * - CONNECT → the user's session count goes up; crossing 0→1 notifies their chat partners "online";
  * - SUBSCRIBE to `/user/queue/conv/{id}` → the user is viewing that thread, so it's marked read now
  *   and the [ActiveConversationRegistry] starts treating live messages for it as read on arrival;
  * - UNSUBSCRIBE → they left the thread;
- * - DISCONNECT → every subscription the session held is dropped.
+ * - DISCONNECT → every subscription the session held is dropped, and the session count goes down;
+ *   crossing →0 (their last device gone) notifies their chat partners "offline".
  *
- * Because this reads the frame the client must send to *receive* the conversation, a client can't
- * read live messages without being marked present.
+ * Online/offline counts sessions so a user on several devices stays online until the last one
+ * closes. Presence is pushed only to people who have a conversation with the user (their inbox),
+ * not broadcast. Because viewing is read from the frame a client must send to *receive* a
+ * conversation, a client can't read live messages without being marked present.
  */
 @Component
 class WebSocketPresenceListener(
     private val activeConversations: ActiveConversationRegistry,
+    private val presence: PresenceRegistry,
     private val chatService: ChatService,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
+
+    @EventListener
+    fun onConnect(event: SessionConnectedEvent) {
+        val userId = StompHeaderAccessor.wrap(event.message).user?.name ?: return
+        if (presence.connected(userId)) {
+            chatService.notifyPresence(userId, online = true)
+        }
+    }
 
     @EventListener
     fun onSubscribe(event: SessionSubscribeEvent) {
@@ -53,6 +68,10 @@ class WebSocketPresenceListener(
     @EventListener
     fun onDisconnect(event: SessionDisconnectEvent) {
         activeConversations.sessionGone(event.sessionId)
+        val userId = event.user?.name ?: return
+        if (presence.disconnected(userId)) {
+            chatService.notifyPresence(userId, online = false)
+        }
     }
 
     /** Pulls the conversation id out of a `.../queue/conv/{id}` destination, or null if it isn't one. */

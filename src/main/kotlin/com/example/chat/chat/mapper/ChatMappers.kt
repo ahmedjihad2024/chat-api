@@ -18,13 +18,15 @@ fun Message.toResponse(): MessageResponse = MessageResponse(
 /**
  * Renders a conversation for [viewerId]: picks the other participant as [otherUser] and reads
  * the viewer's own unread counter. [otherUser] is supplied pre-loaded so the service can batch
- * the user lookups for a whole page.
+ * the user lookups for a whole page; [online] is the partner's live presence, resolved from the
+ * in-memory registry (never persisted), so a freshly-opened app sees who's online right away.
  */
-fun Conversation.toResponse(viewerId: String, otherUser: UserResponse): ConversationResponse =
+fun Conversation.toResponse(viewerId: String, otherUser: UserResponse, online: Boolean = false): ConversationResponse =
     ConversationResponse(
         id = id.toHexString(),
         otherUser = otherUser,
         lastMessageAt = lastMessageAt,
         lastMessagePreview = lastMessagePreview,
         unread = unread[viewerId] ?: 0,
+        online = online,
     )

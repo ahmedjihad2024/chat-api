@@ -22,7 +22,7 @@ actually hurt.
 | Worth a test ✅ | Skip it ❌ |
 |---|---|
 | `if` / branches, validation, error cases | Getters, simple data classes (DTOs) |
-| Authorization ("is this *your* note?") | Pure field-copying (mappers) |
+| Authorization ("are you a participant of this chat?") | Pure field-copying (mappers) |
 | Anything involving money or permissions | Thin wrappers over the framework |
 | Token generation / validation | One-line wrappers over the JDK |
 | A bug you just fixed (so it never returns) | Code with no `if` and no logic |
@@ -52,15 +52,15 @@ Test **one class** with its dependencies faked (mocked). No database, no Spring,
 milliseconds. Live next to the code they test, e.g.:
 
 ```
-src/test/kotlin/com/example/note/auth/AuthServiceTest.kt
-src/test/kotlin/com/example/note/note/NoteServiceTest.kt
-src/test/kotlin/com/example/note/admin/AdminServiceTest.kt
-src/test/kotlin/com/example/note/user/UserServiceTest.kt
-src/test/kotlin/com/example/note/security/jwt/JwtServiceTest.kt
+src/test/kotlin/com/example/chat/auth/AuthServiceTest.kt
+src/test/kotlin/com/example/chat/chat/ChatServiceTest.kt
+src/test/kotlin/com/example/chat/follows/FollowServiceTest.kt
+src/test/kotlin/com/example/chat/user/UserServiceTest.kt
+src/test/kotlin/com/example/chat/security/jwt/JwtServiceTest.kt
 ```
 
 ### Integration test (slow — keep it to a few)
-`NoteApplicationTests` boots the **whole Spring context** against an embedded MongoDB to
+`ChatApplicationTests` boots the **whole Spring context** against an embedded MongoDB to
 prove everything wires together. The first run downloads the MongoDB binary (one time,
 then cached).
 
@@ -76,7 +76,7 @@ then cached).
 ./gradlew test --tests "com.example.chat.auth.AuthServiceTest"
 
 # one package
-./gradlew test --tests "com.example.chat.note.*"
+./gradlew test --tests "com.example.chat.chat.*"
 ```
 
 The HTML report is written to `build/reports/tests/test/index.html`.
@@ -90,11 +90,11 @@ The HTML report is written to `build/reports/tests/test/index.html`.
 fun `rejects a wrong password`() {
     // Arrange — set up the world
     val user = Fixtures.user()
-    every { userRepository.findByEmail(user.email) } returns user
+    every { userRepository.findByPhone(user.phone) } returns user
     every { passwordEncoder.matches("wrong", user.hashedPassword!!) } returns false
 
     // Act + Assert — call the code and check the outcome
-    assertThatThrownBy { service.login(user.email, "wrong") }
+    assertThatThrownBy { service.login(user.phone, "wrong") }
         .isInstanceOf(ApiException.Unauthorized::class.java)
         .hasMessage("error.auth.invalid_password")
 }
@@ -112,7 +112,7 @@ fun `rejects a wrong password`() {
 val repo = mockk<UserRepository>(relaxed = true)
 
 // 2. Tell it what to return when called a certain way
-every { repo.findByEmail("a@b.com") } returns Fixtures.user()
+every { repo.findByPhone("+201234567890") } returns Fixtures.user()
 
 // 3. Verify a call happened (or did not)
 verify { repo.delete(any()) }
@@ -125,7 +125,7 @@ Capture what was saved to assert on it:
 val saved = slot<User>()
 every { repo.save(capture(saved)) } answers { saved.captured }
 // ... call the service ...
-assertThat(saved.captured.emailVerified).isTrue()
+assertThat(saved.captured.phoneVerified).isTrue()
 ```
 
 > **Gotcha:** with a `relaxed` mock, Spring Data's generic `save(S): S` returns a bare
@@ -136,8 +136,8 @@ assertThat(saved.captured.emailVerified).isTrue()
 
 ## 8. Shared test helpers
 
-- **`support/Fixtures.kt`** — builds a ready-made `User`/`Note` in one line, with defaults
-  you can override: `Fixtures.user(emailVerified = false)`.
+- **`support/Fixtures.kt`** — builds a ready-made `User`/`Conversation`/`Message` in one line,
+  with defaults you can override: `Fixtures.user(phoneVerified = false)`.
 - **`support/Translations.kt`** — `initTranslations()` makes `String.tr()` work in a unit
   test (no Spring context to wire up the message source).
 

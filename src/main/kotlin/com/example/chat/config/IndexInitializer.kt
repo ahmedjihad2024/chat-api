@@ -55,6 +55,15 @@ class IndexInitializer(
         ensureIndex("follows", Index().on("followerId", Sort.Direction.ASC).on("followeeId", Sort.Direction.ASC).unique())
         ensureIndex("follows", Index().on("followeeId", Sort.Direction.ASC).on("followerId", Sort.Direction.ASC))
 
+        // conversations:
+        // - pairKey is unique so there is exactly one 1:1 thread per pair (enables atomic get-or-create upsert).
+        // - participantIds + lastMessageAt serves the conversation-list query (my threads, newest first).
+        ensureIndex("conversations", Index().on("pairKey", Sort.Direction.ASC).unique())
+        ensureIndex("conversations", Index().on("participantIds", Sort.Direction.ASC).on("lastMessageAt", Sort.Direction.DESC))
+
+        // messages: (conversationId, createdAt desc) serves the paged history (newest-first infinite scroll).
+        ensureIndex("messages", Index().on("conversationId", Sort.Direction.ASC).on("createdAt", Sort.Direction.DESC))
+
         log.info("MongoDB indexes ensured.")
     }
 

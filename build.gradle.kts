@@ -22,6 +22,10 @@ dependencies {
 	// Builds REST APIs over Spring MVC with embedded Tomcat, Jackson JSON, and servlet support.
 	implementation("org.springframework.boot:spring-boot-starter-web")
 
+	// STOMP-over-WebSocket messaging: @MessageMapping controllers, the in-memory simple broker,
+	// and SimpMessagingTemplate for pushing live chat messages to connected clients.
+	implementation("org.springframework.boot:spring-boot-starter-websocket")
+
 //	implementation("org.springframework.boot:spring-boot-starter-data-mongodb-reactive") // reactive
 
 	// Blocking MongoDB integration via Spring Data: repositories, MongoTemplate, and document mapping.

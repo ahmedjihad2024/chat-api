@@ -20,7 +20,7 @@ class JwtService(
         Keys.hmacShaKeyFor(Base64.getDecoder().decode(jwtSecret))
     }
 
-    private val accessTokenValidityMs  = 15L * 60L * 1000L            // 15 minutes
+    private val accessTokenValidityMs  = 1L * 60L * 60L * 1000L            // 1 HOUR
     val refreshTokenValidityMs: Long
         get() = 30L * 24L * 60L * 60L * 1000L // 30 days
 

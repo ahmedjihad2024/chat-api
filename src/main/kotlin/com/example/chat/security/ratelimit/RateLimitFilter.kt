@@ -3,9 +3,9 @@ package com.example.chat.security.ratelimit
 import com.example.chat.common.dto.ApiResponse
 import com.example.chat.common.exception.ErrorCode
 import com.example.chat.common.extentions.tr
+import com.github.benmanes.caffeine.cache.Caffeine
 import io.github.bucket4j.Bandwidth
 import io.github.bucket4j.Bucket
-import io.github.bucket4j.Refill
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -14,7 +14,7 @@ import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.stereotype.Component
 import org.springframework.web.filter.OncePerRequestFilter
 import tools.jackson.databind.ObjectMapper
-import java.util.concurrent.ConcurrentHashMap
+import java.time.Duration
 
 @Component
 class RateLimitFilter(
@@ -26,8 +26,15 @@ class RateLimitFilter(
      * In-memory bucket store. Single-instance only — running multiple replicas means
      * each instance enforces limits independently. Swap for a Redis-backed bucket
      * (bucket4j-redis) when running clustered.
+     *
+     * Caffeine bounds the map: idle keys expire after 10 minutes (by then a full bucket
+     * would have refilled anyway, so dropping it is safe), and the hard cap protects
+     * against IP-spraying attackers that would otherwise grow the map without limit.
      */
-    private val buckets = ConcurrentHashMap<String, Bucket>()
+    private val buckets = Caffeine.newBuilder()
+        .expireAfterAccess(Duration.ofMinutes(10))
+        .maximumSize(100_000)
+        .build<String, Bucket>()
 
     override fun doFilterInternal(
         request: HttpServletRequest,
@@ -44,7 +51,7 @@ class RateLimitFilter(
             return
         }
 
-        val bucket = buckets.computeIfAbsent(resolution.key) { newBucket(resolution.rule) }
+        val bucket = buckets.get(resolution.key) { newBucket(resolution.rule) }
         val probe = bucket.tryConsumeAndReturnRemaining(1)
 
         if (!probe.isConsumed) {
@@ -78,7 +85,10 @@ class RateLimitFilter(
     }
 
     private fun newBucket(rule: RateLimitProperties.Rule): Bucket {
-        val limit = Bandwidth.classic(rule.capacity, Refill.intervally(rule.capacity, rule.refill))
+        val limit = Bandwidth.builder()
+            .capacity(rule.capacity)
+            .refillIntervally(rule.capacity, rule.refill)
+            .build()
         return Bucket.builder().addLimit(limit).build()
     }
 

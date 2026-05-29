@@ -30,7 +30,12 @@ class JwtAuthFilter(
                     val authorities = jwtService.getRolesFromToken(authHeader)
                         .map { SimpleGrantedAuthority(it.authority()) }
                     val auth = UsernamePasswordAuthenticationToken(userId, null, authorities)
-                    SecurityContextHolder.getContext().authentication = auth
+                    // Stores the authenticated user in a ThreadLocal scoped to this request's thread,
+                    // so downstream filters (authorization), @PreAuthorize, and @AuthenticationPrincipal can read it.
+                    // 3-arg ctor marks isAuthenticated=true; Spring clears the context after the request ends.
+                    val context = SecurityContextHolder.createEmptyContext()
+                    context.authentication = auth
+                    SecurityContextHolder.setContext(context)
                 }
             }
         }

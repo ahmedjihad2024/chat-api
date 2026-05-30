@@ -1,6 +1,6 @@
 # Fly.io app config. Run `fly launch --no-deploy` once to pick a real app name
 # and region, then `fly deploy`. Secrets are NOT stored here — see README/notes.
-app = "chat-api"
+app = "chat-api-ahmed-2026-FHsdffa"
 primary_region = "fra"   # change to your closest region (e.g. cdg, ams, iad)
 
 [build]

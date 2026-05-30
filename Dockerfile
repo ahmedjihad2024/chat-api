@@ -17,14 +17,18 @@ RUN ./gradlew --no-daemon clean bootJar -x test
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 
-# Run as a non-root user.
-RUN useradd --system --uid 1001 spring
+# Run as a non-root user. Create the avatar dir up front and hand /app to that
+# user so the app can write uploads at runtime (no root, no mounted volume).
+RUN useradd --system --uid 1001 spring \
+ && mkdir -p /app/uploads/avatars \
+ && chown -R spring:spring /app
 USER spring
 
-COPY --from=build /app/build/libs/*.jar app.jar
+COPY --from=build --chown=spring:spring /app/build/libs/*.jar app.jar
 
-# Default avatar dir points at the mounted volume (see fly.toml [mounts]).
-ENV AVATAR_DIR=/data/avatars
+# Avatars live under the app dir. NOTE: this disk is ephemeral on hosts without
+# a mounted volume (Railway/Koyeb free) — uploads are wiped on every restart.
+ENV AVATAR_DIR=/app/uploads/avatars
 
 EXPOSE 8080
 ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "app.jar"]

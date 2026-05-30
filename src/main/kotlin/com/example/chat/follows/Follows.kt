@@ -11,7 +11,9 @@ import java.time.Instant
 @CompoundIndex(name = "followee_follower", def = "{'followeeId': 1, 'followerId': 1}")
 data class Follows(
     @Id val id: ObjectId = ObjectId(),
+    // The user who clicked "follow" (the subscriber). Reads as: followerId follows followeeId.
     val followerId: ObjectId,
+    // The user being followed (the target/subject of the follow).
     val followeeId: ObjectId,
     val createdAt: Instant = Instant.now(),
 )

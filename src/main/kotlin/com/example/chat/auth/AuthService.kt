@@ -73,12 +73,16 @@ class AuthService(
 
         @Transactional
         fun login(phone: String, password: String): AuthResponse {
-            val user = userRepository.findByPhone(phone)
+            var user = userRepository.findByPhone(phone)
                 ?: throw ApiException.Unauthorized("error.auth.phone_not_found")
         val stored = user.hashedPassword
             ?: throw ApiException.Unauthorized("error.auth.invalid_password")
         if (!passwordEncoder.matches(password, stored)) {
             throw ApiException.Unauthorized("error.auth.invalid_password")
+        }
+        // Logging in within the grace period restores a soft-deleted account.
+        if (user.deleted) {
+            user = userRepository.save(user.copy(deleted = false, deletedAt = null))
         }
         if (!user.phoneVerified) {
             issueAndSendVerificationCode(user)

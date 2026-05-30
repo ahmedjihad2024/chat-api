@@ -15,7 +15,7 @@ import com.example.chat.chat.repository.ConversationRepository
 import com.example.chat.chat.repository.MessageRepository
 import com.example.chat.common.dto.ApiResponse
 import com.example.chat.common.exception.ApiException
-import com.example.chat.user.mapper.toResponse
+import com.example.chat.user.mapper.toConversationParticipant
 import com.example.chat.user.repository.UserRepository
 import org.bson.types.ObjectId
 import org.springframework.data.domain.PageImpl
@@ -53,7 +53,7 @@ class ChatService(
 
         val conversation = conversationRepository.findOrCreate(me, other)
         val online = presence.isOnline(otherUserId)
-        return ApiResponse.ok(conversation.toResponse(currentUserId, otherUser.toResponse(), online))
+        return ApiResponse.ok(conversation.toResponse(currentUserId, otherUser.toConversationParticipant(), online))
     }
 
     /** My conversations, paged, newest-active first (sort comes from the caller's Pageable). */
@@ -66,8 +66,8 @@ class ChatService(
         val usersById = userRepository.findAllById(otherIds).associateBy { it.id }
         val responses = page.content.mapNotNull { convo ->
             usersById[convo.otherParticipant(me)]?.let { other ->
-                val online = presence.isOnline(other.id.toHexString())
-                convo.toResponse(currentUserId, other.toResponse(), online)
+                val online = !other.deleted && presence.isOnline(other.id.toHexString())
+                convo.toResponse(currentUserId, other.toConversationParticipant(), online)
             }
         }
         return ApiResponse.paged(PageImpl(responses, pageable, page.totalElements))

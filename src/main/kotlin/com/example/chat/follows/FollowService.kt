@@ -64,6 +64,25 @@ class FollowService(
         userRepository.decrementFollowingCount(followerId)
     }
 
+    /**
+     * Removes every follow edge touching [userId] (account purge). For each edge the *counterpart's*
+     * denormalized counter is decremented so surviving profiles stay accurate; [userId]'s own
+     * counters are left as-is since the document is about to be anonymized.
+     */
+    @Transactional
+    fun purgeUser(userId: ObjectId) {
+        // userId follows X  → X loses a follower
+        followsRepository.findByFollowerId(userId).forEach {
+            userRepository.decrementFollowersCount(it.followeeId)
+            followsRepository.delete(it)
+        }
+        // X follows userId  → X loses someone they were following
+        followsRepository.findByFolloweeId(userId).forEach {
+            userRepository.decrementFollowingCount(it.followerId)
+            followsRepository.delete(it)
+        }
+    }
+
     /** People who follow [userId] (the followers list), one page at a time. */
     @Transactional(readOnly = true)
     fun followers(userId: ObjectId, pageable: Pageable): ApiResponse<List<UserResponse>> {
@@ -109,10 +128,11 @@ class FollowService(
     private fun Page<Follows>.mapInOrder(idSelector: (Follows) -> ObjectId): Page<UserResponse> =
         PageImpl(usersInOrder(content.map(idSelector)), pageable, totalElements)
 
-    /** Loads the given users in one query and returns them as responses, preserving [ids] order. */
+    /** Loads the given users in one query and returns them as responses, preserving [ids] order.
+     *  Soft-deleted accounts are dropped so they don't surface in followers/following lists. */
     private fun usersInOrder(ids: List<ObjectId>): List<UserResponse> {
         if (ids.isEmpty()) return emptyList()
         val byId = userRepository.findAllById(ids).associateBy { it.id }
-        return ids.mapNotNull { id -> byId[id]?.toResponse() }
+        return ids.mapNotNull { id -> byId[id]?.takeUnless { it.deleted }?.toResponse() }
     }
 }

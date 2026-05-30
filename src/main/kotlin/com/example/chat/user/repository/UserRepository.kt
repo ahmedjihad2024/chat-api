@@ -7,15 +7,20 @@ import org.springframework.data.domain.Pageable
 import org.springframework.data.mongodb.repository.MongoRepository
 import org.springframework.data.mongodb.repository.Query
 import org.springframework.data.mongodb.repository.Update
+import java.time.Instant
 
 interface UserRepository: MongoRepository<User, ObjectId> {
     fun findByPhone(phone: String): User?
     fun findByEmail(email: String): User?
     fun findByName(name: String): User?
 
-    /** Case-insensitive partial match on name OR email. [regex] is matched against both fields. */
-    @Query("{ '\$or': [ { 'name': { '\$regex': ?0, '\$options': 'i' } }, { 'email': { '\$regex': ?0, '\$options': 'i' } } ] }")
+    /** Case-insensitive partial match on name OR email, excluding soft-deleted accounts so a
+     *  deleted user never surfaces in discovery. [regex] is matched against both fields. */
+    @Query("{ 'deleted': { '\$ne': true }, '\$or': [ { 'name': { '\$regex': ?0, '\$options': 'i' } }, { 'email': { '\$regex': ?0, '\$options': 'i' } } ] }")
     fun searchByNameOrEmail(regex: String, pageable: Pageable): Page<User>
+
+    /** Soft-deleted accounts whose grace period has elapsed — the purge job's work list. */
+    fun findByDeletedTrueAndDeletedAtBefore(cutoff: Instant): List<User>
 
     // Atomic ($inc) follow-counter maintenance — race-safe, no read-modify-write.
     @Query("{ '_id': ?0 }")

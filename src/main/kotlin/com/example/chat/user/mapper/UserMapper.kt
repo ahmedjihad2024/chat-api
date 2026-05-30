@@ -17,3 +17,13 @@ fun User.toResponse(relation: FollowRelation? = null): UserResponse = UserRespon
     followingCount = followingCount,
     relation = relation,
 )
+
+/**
+ * How a (possibly deleted) user appears to a chat partner. A live user maps normally; a
+ * soft-deleted one is masked to the placeholder name with no avatar, so existing threads keep
+ * working without leaking the deleted account's identity. Once the purge runs the document is
+ * already anonymized, so this returns the same masked view.
+ */
+fun User.toConversationParticipant(): UserResponse =
+    if (deleted) toResponse().copy(name = User.DELETED_DISPLAY_NAME, avatar = null)
+    else toResponse()

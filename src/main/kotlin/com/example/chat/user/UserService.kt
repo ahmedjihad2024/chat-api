@@ -2,6 +2,7 @@ package com.example.chat.user
 
 import com.example.chat.auth.AuthService
 import com.example.chat.auth.dto.AuthResponse
+import com.example.chat.auth.repository.RefreshTokenRepository
 import com.example.chat.auth.sms.SmsSender
 import com.example.chat.auth.sms.VERIFICATION_CODE_TTL_MINUTES
 import com.example.chat.auth.sms.VerificationCodeGenerator
@@ -34,11 +35,30 @@ class UserService(
     private val avatarStorage: AvatarStorage,
     private val verificationCodeGenerator: VerificationCodeGenerator,
     private val followService: FollowService,
+    private val refreshTokenRepository: RefreshTokenRepository,
 ) {
     fun me(id: String): ApiResponse<UserResponse> {
         val user = userRepository.findById(ObjectId(id))
             .orElseThrow { ApiException.NotFound("error.user.not_found") }
         return ApiResponse.ok(user.toResponse())
+    }
+
+    /**
+     * Soft-deletes the caller's own account: flags it [User.deleted] and stamps the time, then
+     * drops every refresh token so the account is signed out of all devices immediately. The data
+     * is retained for [User.DELETED_RETENTION_DAYS] and fully restored if the user logs back in
+     * (see [AuthService.login]); otherwise the scheduled purge anonymizes it permanently.
+     */
+    @Transactional
+    fun deleteMe(id: String): ApiResponse<Unit> {
+        val userId = ObjectId(id)
+        val user = userRepository.findById(userId)
+            .orElseThrow { ApiException.NotFound("error.user.not_found") }
+        if (!user.deleted) {
+            userRepository.save(user.copy(deleted = true, deletedAt = Instant.now()))
+        }
+        refreshTokenRepository.deleteAllByUserId(userId)
+        return ApiResponse.ok(Unit)
     }
 
     /**

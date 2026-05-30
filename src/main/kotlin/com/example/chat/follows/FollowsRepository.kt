@@ -26,4 +26,8 @@ interface FollowsRepository: MongoRepository<Follows, ObjectId> {
     // Batch relationship lookups against a set of users (for computing FollowRelation in a list).
     fun findByFollowerIdAndFolloweeIdIn(followerId: ObjectId, followeeIds: Collection<ObjectId>): List<Follows>
     fun findByFolloweeIdAndFollowerIdIn(followeeId: ObjectId, followerIds: Collection<ObjectId>): List<Follows>
+
+    // All edges involving a user (either side) — used to unwind a purged account's follow graph.
+    fun findByFollowerId(followerId: ObjectId): List<Follows>
+    fun findByFolloweeId(followeeId: ObjectId): List<Follows>
 }

@@ -1,0 +1,18 @@
+# Keep the build context small & secret-free.
+.git
+.gradle
+.kotlin
+.idea
+.junie
+.claude
+.vscode
+build/
+out/
+uploads/
+docs/
+logs/
+*.log
+.env
+.env.*
+!.env.example
+HELP.md

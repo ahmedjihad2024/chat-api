@@ -29,6 +29,13 @@ spring:
     # If a message key has no translation, return the key itself instead of throwing.
     use-code-as-default-message: true
   data:
+    redis:
+      # Redis connection URL. Defaults to a local instance (docker-compose) for dev; in production set
+      # REDIS_URL to the managed endpoint, using rediss:// for TLS providers (Upstash, Fly Redis, ...).
+      # Backs rate limiting, presence, the viewing registry, and the live message pub/sub bridge.
+      url: ${REDIS_URL:redis://localhost:6379}
+      # Fail fast instead of hanging if Redis is unreachable (the rate limiter is fail-open on timeout).
+      timeout: 2s
     web:
       pageable:
         # Default page size when the client doesn't pass `size`.

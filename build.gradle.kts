@@ -72,6 +72,11 @@ dependencies {
 	// @SpringBootTest so the full application context loads without a real database or Docker.
 	testImplementation("de.flapdoodle.embed:de.flapdoodle.embed.mongo.spring4x:4.24.0")
 
+	// Embedded Redis — boots a real redis-server on an ephemeral port for @SpringBootTest, so the
+	// context (bucket4j proxy manager + pub/sub listener) loads without a running Redis or Docker.
+	// Same philosophy as the embedded Mongo above.
+	testImplementation("com.github.codemonstur:embedded-redis:1.4.3")
+
 	// JUnit Platform launcher required at test runtime by newer Gradle/Surefire versions.
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
@@ -90,12 +95,17 @@ dependencies {
 	// Spring Boot Actuator — exposes production-ready endpoints (health, info, metrics).
 	implementation("org.springframework.boot:spring-boot-starter-actuator")
 
+	// Spring Data Redis (Lettuce client) — shared store for rate-limit buckets, presence, and the
+	// "who is viewing" registry, plus the pub/sub bridge that fans live WebSocket messages across
+	// instances. This is what makes the app safe to run as multiple replicas.
+	implementation("org.springframework.boot:spring-boot-starter-data-redis")
+
 	// Bucket4j core — token-bucket rate limiting library (used by RateLimitFilter).
 	implementation("com.bucket4j:bucket4j-core:8.10.1")
 
-	// Caffeine — high-performance in-process cache used by RateLimitFilter to bound the
-	// bucket map (TTL + max size) so unique IPs/users can't grow it without limit.
-	implementation("com.github.ben-manes.caffeine:caffeine:3.1.8")
+	// Bucket4j Redis (Lettuce) — distributed bucket store so every replica enforces one shared limit
+	// instead of N independent ones. Replaces the old in-memory Caffeine bucket map.
+	implementation("com.bucket4j:bucket4j-redis:8.10.1")
 
 	// Springdoc OpenAPI — auto-generates an OpenAPI 3 spec from controllers and serves Swagger UI.
 	// Exposes /v3/api-docs (JSON spec, importable into Postman) and /swagger-ui.html.

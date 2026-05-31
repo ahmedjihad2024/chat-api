@@ -1,0 +1,25 @@
+# Local development dependencies. Brings up the Redis the app needs for rate limiting, presence, the
+# viewing registry, and the live-message pub/sub bridge.
+#
+#   docker compose up -d redis
+#
+# The app's dev profile defaults to redis://localhost:6379 (see application.yaml), so no extra config is
+# needed locally. In production, point REDIS_URL at a managed Redis instead of running this.
+services:
+  redis:
+    image: redis:7
+    container_name: chat-redis
+    ports:
+      - "6379:6379"
+    # Persist between restarts so local presence/buckets survive a `docker compose restart`.
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  redis-data:

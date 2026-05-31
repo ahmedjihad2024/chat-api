@@ -3,38 +3,32 @@ package com.example.chat.security.ratelimit
 import com.example.chat.common.dto.ApiResponse
 import com.example.chat.common.exception.ErrorCode
 import com.example.chat.common.extentions.tr
-import com.github.benmanes.caffeine.cache.Caffeine
 import io.github.bucket4j.Bandwidth
-import io.github.bucket4j.Bucket
+import io.github.bucket4j.BucketConfiguration
+import io.github.bucket4j.redis.lettuce.cas.LettuceBasedProxyManager
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import org.slf4j.LoggerFactory
 import org.springframework.http.MediaType
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.stereotype.Component
 import org.springframework.web.filter.OncePerRequestFilter
 import tools.jackson.databind.ObjectMapper
-import java.time.Duration
+import java.util.function.Supplier
 
 @Component
 class RateLimitFilter(
     private val properties: RateLimitProperties,
     private val objectMapper: ObjectMapper,
+    /**
+     * Redis-backed bucket store: every replica shares one bucket per key, so the limit is enforced
+     * globally instead of N times. Idle keys expire (configured on the proxy manager) to bound memory.
+     */
+    private val proxyManager: LettuceBasedProxyManager<String>,
 ) : OncePerRequestFilter() {
 
-    /**
-     * In-memory bucket store. Single-instance only — running multiple replicas means
-     * each instance enforces limits independently. Swap for a Redis-backed bucket
-     * (bucket4j-redis) when running clustered.
-     *
-     * Caffeine bounds the map: idle keys expire after 10 minutes (by then a full bucket
-     * would have refilled anyway, so dropping it is safe), and the hard cap protects
-     * against IP-spraying attackers that would otherwise grow the map without limit.
-     */
-    private val buckets = Caffeine.newBuilder()
-        .expireAfterAccess(Duration.ofMinutes(10))
-        .maximumSize(100_000)
-        .build<String, Bucket>()
+    private val log = LoggerFactory.getLogger(javaClass)
 
     override fun doFilterInternal(
         request: HttpServletRequest,
@@ -51,8 +45,17 @@ class RateLimitFilter(
             return
         }
 
-        val bucket = buckets.get(resolution.key) { newBucket(resolution.rule) }
-        val probe = bucket.tryConsumeAndReturnRemaining(1)
+        val probe = try {
+            val bucket = proxyManager.builder()
+                .build(resolution.key) { bucketConfig(resolution.rule) }
+            bucket.tryConsumeAndReturnRemaining(1)
+        } catch (e: Exception) {
+            // Fail-open: a Redis outage must not lock real users out of the whole API. We lose
+            // throttling for the duration of the outage, which is the safer trade-off here.
+            log.warn("Rate limit check skipped — Redis unavailable: {}", e.message)
+            filterChain.doFilter(request, response)
+            return
+        }
 
         if (!probe.isConsumed) {
             writeTooManyRequests(response, probe.nanosToWaitForRefill / 1_000_000_000L)
@@ -84,12 +87,12 @@ class RateLimitFilter(
         }
     }
 
-    private fun newBucket(rule: RateLimitProperties.Rule): Bucket {
+    private fun bucketConfig(rule: RateLimitProperties.Rule): BucketConfiguration {
         val limit = Bandwidth.builder()
             .capacity(rule.capacity)
             .refillIntervally(rule.capacity, rule.refill)
             .build()
-        return Bucket.builder().addLimit(limit).build()
+        return BucketConfiguration.builder().addLimit(limit).build()
     }
 
     private fun clientIp(request: HttpServletRequest): String {

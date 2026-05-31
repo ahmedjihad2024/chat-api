@@ -36,8 +36,10 @@ class WebSocketPresenceListener(
 
     @EventListener
     fun onConnect(event: SessionConnectedEvent) {
-        val userId = StompHeaderAccessor.wrap(event.message).user?.name ?: return
-        if (presence.connected(userId)) {
+        val accessor = StompHeaderAccessor.wrap(event.message)
+        val userId = accessor.user?.name ?: return
+        val sessionId = accessor.sessionId ?: return
+        if (presence.connected(userId, sessionId)) {
             chatService.notifyPresence(userId, online = true)
         }
     }
@@ -69,7 +71,7 @@ class WebSocketPresenceListener(
     fun onDisconnect(event: SessionDisconnectEvent) {
         activeConversations.sessionGone(event.sessionId)
         val userId = event.user?.name ?: return
-        if (presence.disconnected(userId)) {
+        if (presence.disconnected(userId, event.sessionId)) {
             chatService.notifyPresence(userId, online = false)
         }
     }

@@ -30,4 +30,8 @@ interface FollowsRepository: MongoRepository<Follows, ObjectId> {
     // All edges involving a user (either side) — used to unwind a purged account's follow graph.
     fun findByFollowerId(followerId: ObjectId): List<Follows>
     fun findByFolloweeId(followeeId: ObjectId): List<Follows>
+
+    // Bulk-delete every edge on one side in a single call (account purge). Returns how many were removed.
+    fun deleteByFollowerId(followerId: ObjectId): Long
+    fun deleteByFolloweeId(followeeId: ObjectId): Long
 }

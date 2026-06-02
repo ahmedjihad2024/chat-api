@@ -55,7 +55,11 @@ class UserService(
         val user = userRepository.findById(userId)
             .orElseThrow { ApiException.NotFound("error.user.not_found") }
         if (!user.deleted) {
-            userRepository.save(user.copy(deleted = true, deletedAt = Instant.now()))
+            userRepository.updateUserById(
+                id = userId,
+                deleted = true,
+                deletedAt = Instant.now()
+            )
         }
         refreshTokenRepository.deleteAllByUserId(userId)
         return ApiResponse.ok(Unit)
@@ -80,15 +84,17 @@ class UserService(
             .orElseThrow { ApiException.NotFound("error.user.not_found") }
         val previousFilename = user.avatarFilename
         val newFilename = avatarStorage.store(file)
-        val updated = userRepository.save(user.copy(avatarFilename = newFilename))
+        // Targeted update: set only avatarFilename, so a concurrent follow ($inc) or other change
+        // is never clobbered by a stale full-document write.
+        val updated = userRepository.updateUserById(id = user.id, avatarFilename = newFilename)
+            ?: throw ApiException.NotFound("error.user.not_found")
         // Drop the old file only after the pointer is safely persisted, to avoid orphaning the live avatar.
         previousFilename?.let { avatarStorage.delete(it) }
         return ApiResponse.ok(updated.toResponse())
     }
 
-    /** Updates the mutable profile fields. Each argument is applied only when non-null;
-     *  a null leaves that field unchanged. Email is optional/unverified and set directly,
-     *  with a sparse-unique check so two accounts can't share one. */
+    /** Updates name/email (each applied only when non-null). Targeted update so concurrent
+     *  changes aren't clobbered; the sparse-unique index guards against duplicate emails. */
     @Transactional
     fun updateProfile(id: String, name: String?, email: String?): ApiResponse<UserResponse> {
         val user = userRepository.findById(ObjectId(id))
@@ -99,16 +105,21 @@ class UserService(
                 throw ApiException.Conflict("error.auth.email_already_exists")
             }
         }
-        val updated = user.copy(
-            name = name ?: user.name,
-            email = email ?: user.email,
-        )
-        if (updated == user) return ApiResponse.ok(user.toResponse())
-        return ApiResponse.ok(userRepository.save(updated).toResponse())
+        // Nothing actually changed -> skip the write.
+        if ((name == null || name == user.name) && (email == null || email == user.email)) {
+            return ApiResponse.ok(user.toResponse())
+        }
+        val updated = userRepository.updateUserById(id = user.id, name = name, email = email)
+            ?: throw ApiException.NotFound("error.user.not_found")
+        return ApiResponse.ok(updated.toResponse())
     }
 
     @Transactional
-    fun changePassword(id: String, currentPassword: String, newPassword: String): ApiResponse<AuthResponse.Authenticated> {
+    fun changePassword(
+        id: String,
+        currentPassword: String,
+        newPassword: String
+    ): ApiResponse<AuthResponse.Authenticated> {
         val user = userRepository.findById(ObjectId(id))
             .orElseThrow { ApiException.NotFound("error.user.not_found") }
         val stored = user.hashedPassword
@@ -116,9 +127,11 @@ class UserService(
         if (!passwordEncoder.matches(currentPassword, stored)) {
             throw ApiException.BadRequest("error.user.invalid_current_password")
         }
-        val updated = userRepository.save(
-            user.copy(hashedPassword = passwordEncoder.encode(newPassword)),
-        )
+        // Targeted update: only hashedPassword is written, never the whole document.
+        val updated = userRepository.updateUserById(
+            id = user.id,
+            hashedPassword = passwordEncoder.encode(newPassword),
+        ) ?: throw ApiException.NotFound("error.user.not_found")
         return ApiResponse.ok(authService.reissueAfterPasswordChange(updated))
     }
 
@@ -157,22 +170,30 @@ class UserService(
     fun verifyChangePhoneCode(id: String, code: String): ApiResponse<UserResponse> {
         val user = userRepository.findById(ObjectId(id))
             .orElseThrow { ApiException.NotFound("error.user.not_found") }
+
         val pending = phoneChangeRequestRepository.findByUserId(user.id)
             ?: throw ApiException.BadRequest("error.user.no_pending_phone_change")
+
         if (pending.expiresAt.isBefore(Instant.now())) {
             phoneChangeRequestRepository.delete(pending)
             throw ApiException.BadRequest("error.user.phone_change_code_expired")
         }
+
         if (pending.code != code.sha256()) {
             throw ApiException.BadRequest("error.user.phone_change_code_invalid")
         }
+
         val taken = userRepository.findByPhone(pending.newPhone)
         if (taken != null && taken.id != user.id) {
             phoneChangeRequestRepository.delete(pending)
             throw ApiException.Conflict("error.auth.phone_already_exists")
         }
-        val updated = userRepository.save(user.copy(phone = pending.newPhone))
+
+        // Targeted update: only phone is written, never the whole document.
+        val updated = userRepository.updateUserById(id = user.id, phone = pending.newPhone)
+            ?: throw ApiException.NotFound("error.user.not_found")
         phoneChangeRequestRepository.delete(pending)
+
         return ApiResponse.ok(updated.toResponse())
     }
 }

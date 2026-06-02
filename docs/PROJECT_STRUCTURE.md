@@ -50,7 +50,7 @@ com.example.chat
 │   ├── AuthController.kt · AuthService.kt
 │   ├── sms/                                 # SmsSender (LogSmsSender dev, TwilioSmsSender prod)
 │   ├── passwordReset/                       # reset code entity/repo/dto
-│   ├── entities/  repository/  dto/         # RefreshToken, RevokedAccessToken, PhoneVerificationCode
+│   ├── entities/  repository/  dto/         # RefreshToken, PhoneVerificationCode
 │
 ├── chat/                                    # FEATURE — realtime messaging
 │   ├── ChatController.kt                    # REST: list conversations, history

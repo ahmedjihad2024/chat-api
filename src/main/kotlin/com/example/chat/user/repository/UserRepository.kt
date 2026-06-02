@@ -9,7 +9,7 @@ import org.springframework.data.mongodb.repository.Query
 import org.springframework.data.mongodb.repository.Update
 import java.time.Instant
 
-interface UserRepository: MongoRepository<User, ObjectId> {
+interface UserRepository: MongoRepository<User, ObjectId>, UserRepositoryCustom {
     fun findByPhone(phone: String): User?
     fun findByEmail(email: String): User?
     fun findByName(name: String): User?
@@ -38,4 +38,13 @@ interface UserRepository: MongoRepository<User, ObjectId> {
     @Query("{ '_id': ?0 }")
     @Update("{ '\$inc': { 'followingCount': -1 } }")
     fun decrementFollowingCount(id: ObjectId)
+
+    // Bulk counter maintenance for account purge — one update across all given users.
+    @Query("{ '_id': { '\$in': ?0 } }")
+    @Update("{ '\$inc': { 'followersCount': -1 } }")
+    fun decrementFollowersCountForAll(ids: Collection<ObjectId>)
+
+    @Query("{ '_id': { '\$in': ?0 } }")
+    @Update("{ '\$inc': { 'followingCount': -1 } }")
+    fun decrementFollowingCountForAll(ids: Collection<ObjectId>)
 }

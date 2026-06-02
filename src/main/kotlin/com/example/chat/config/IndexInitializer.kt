@@ -37,9 +37,6 @@ class IndexInitializer(
         ensureIndex("refresh_tokens", Index().on("expiresAt", Sort.Direction.ASC).expire(0, TimeUnit.SECONDS))
         ensureIndex("refresh_tokens", Index().on("userId", Sort.Direction.ASC).on("hashedToken", Sort.Direction.ASC))
 
-        // revoked_access_tokens: TTL only — jti is the @Id, so no extra index needed.
-        ensureIndex("revoked_access_tokens", Index().on("expiresAt", Sort.Direction.ASC).expire(0, TimeUnit.SECONDS))
-
         // phone_verification_codes: one pending row per user, expires automatically.
         ensureIndex("phone_verification_codes", Index().on("userId", Sort.Direction.ASC).unique())
         ensureIndex("phone_verification_codes", Index().on("expiresAt", Sort.Direction.ASC).expire(0, TimeUnit.SECONDS))

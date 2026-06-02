@@ -4,6 +4,7 @@ import com.example.chat.common.dto.ApiResponse
 import com.example.chat.common.extentions.tr
 import jakarta.validation.ConstraintViolationException
 import org.springframework.dao.DuplicateKeyException
+import org.springframework.dao.OptimisticLockingFailureException
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.AccessDeniedException
@@ -36,6 +37,12 @@ class GlobalExceptionHandler {
     @ExceptionHandler(DuplicateKeyException::class)
     fun handleDuplicate(ex: DuplicateKeyException): ResponseEntity<ApiResponse<Nothing>> =
         respond(ErrorCode.CONFLICT, ex.message)
+
+    /** Optimistic-lock clash: the document was modified by another request between read and save.
+     *  Surfaced as 409 so the client knows to re-fetch and retry rather than a generic 500. */
+    @ExceptionHandler(OptimisticLockingFailureException::class)
+    fun handleOptimisticLock(ex: OptimisticLockingFailureException): ResponseEntity<ApiResponse<Nothing>> =
+        respond(ErrorCode.CONFLICT, "error.concurrent_modification")
 
     @ExceptionHandler(MethodArgumentNotValidException::class)
     fun handleBodyValidation(ex: MethodArgumentNotValidException): ResponseEntity<ApiResponse<Nothing>> {

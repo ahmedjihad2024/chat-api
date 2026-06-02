@@ -1,6 +1,5 @@
 package com.example.chat.security.jwt
 
-import com.example.chat.auth.repository.RevokedAccessTokenRepository
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -13,7 +12,7 @@ import org.springframework.web.filter.OncePerRequestFilter
 @Component
 class JwtAuthFilter(
     private val jwtService: JwtService,
-    private val revokedAccessTokenRepository: RevokedAccessTokenRepository,
+    private val tokenBlacklist: TokenBlacklist,
 ): OncePerRequestFilter() {
 
     override fun doFilterInternal(
@@ -25,7 +24,7 @@ class JwtAuthFilter(
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             if (jwtService.validateAccessToken(authHeader)) {
                 val jti = jwtService.getJti(authHeader)
-                if (!revokedAccessTokenRepository.existsByJti(jti)) {
+                if (!tokenBlacklist.isRevoked(jti)) {
                     val userId = jwtService.getUserIdFromToken(authHeader)
                     val authorities = jwtService.getRolesFromToken(authHeader)
                         .map { SimpleGrantedAuthority(it.authority()) }

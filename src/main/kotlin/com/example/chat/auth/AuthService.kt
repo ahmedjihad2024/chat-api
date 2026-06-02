@@ -5,18 +5,17 @@ import com.example.chat.auth.dto.TokenResponse
 import com.example.chat.auth.entities.PhoneVerificationCode
 import com.example.chat.auth.passwordReset.PasswordResetCode
 import com.example.chat.auth.entities.RefreshToken
-import com.example.chat.auth.entities.RevokedAccessToken
 import com.example.chat.auth.sms.SmsSender
 import com.example.chat.auth.sms.VERIFICATION_CODE_TTL_MINUTES
 import com.example.chat.auth.sms.VerificationCodeGenerator
 import com.example.chat.auth.repository.PhoneVerificationCodeRepository
 import com.example.chat.auth.passwordReset.PasswordResetCodeRepository
 import com.example.chat.auth.repository.RefreshTokenRepository
-import com.example.chat.auth.repository.RevokedAccessTokenRepository
 import com.example.chat.common.exception.ApiException
 import com.example.chat.common.extentions.sha256
 import com.example.chat.common.extentions.tr
 import com.example.chat.security.jwt.JwtService
+import com.example.chat.security.jwt.TokenBlacklist
 import com.example.chat.user.entities.User
 import com.example.chat.user.repository.UserRepository
 import com.example.chat.user.mapper.toResponse
@@ -31,7 +30,7 @@ import java.time.temporal.ChronoUnit
 class AuthService(
     private val userRepository: UserRepository,
     private val refreshTokenRepository: RefreshTokenRepository,
-    private val revokedAccessTokenRepository: RevokedAccessTokenRepository,
+    private val tokenBlacklist: TokenBlacklist,
     private val phoneVerificationCodeRepository: PhoneVerificationCodeRepository,
     private val passwordResetCodeRepository: PasswordResetCodeRepository,
     private val jwtService: JwtService,
@@ -160,11 +159,9 @@ class AuthService(
             refreshTokenRepository.deleteByUserIdAndHashedToken(userId, refreshToken.sha256())
         }
         if (accessToken != null && jwtService.validateAccessToken(accessToken)) {
-            revokedAccessTokenRepository.save(
-                RevokedAccessToken(
-                    jti = jwtService.getJti(accessToken),
-                    expiresAt = jwtService.getExpiry(accessToken),
-                )
+            tokenBlacklist.revoke(
+                jti = jwtService.getJti(accessToken),
+                expiresAt = jwtService.getExpiry(accessToken),
             )
         }
     }

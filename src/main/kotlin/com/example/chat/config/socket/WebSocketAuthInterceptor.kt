@@ -1,7 +1,7 @@
 package com.example.chat.config.socket
 
-import com.example.chat.auth.repository.RevokedAccessTokenRepository
 import com.example.chat.security.jwt.JwtService
+import com.example.chat.security.jwt.TokenBlacklist
 import org.springframework.messaging.Message
 import org.springframework.messaging.MessageChannel
 import org.springframework.messaging.simp.stomp.StompCommand
@@ -23,7 +23,7 @@ import java.security.Principal
 @Component
 class WebSocketAuthInterceptor(
     private val jwtService: JwtService,
-    private val revokedAccessTokenRepository: RevokedAccessTokenRepository,
+    private val tokenBlacklist: TokenBlacklist,
 ) : ChannelInterceptor {
     override fun preSend(message: Message<*>, channel: MessageChannel): Message<*> {
         val accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor::class.java)
@@ -40,7 +40,7 @@ class WebSocketAuthInterceptor(
         if (authHeader == null || !authHeader.startsWith("Bearer ")) return null
         if (!jwtService.validateAccessToken(authHeader)) return null
         val jti = jwtService.getJti(authHeader)
-        if (revokedAccessTokenRepository.existsByJti(jti)) return null
+        if (tokenBlacklist.isRevoked(jti)) return null
         return jwtService.getUserIdFromToken(authHeader)
     }
 }

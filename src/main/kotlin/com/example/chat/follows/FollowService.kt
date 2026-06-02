@@ -8,6 +8,7 @@ import com.example.chat.user.dto.UserResponse
 import com.example.chat.user.mapper.toResponse
 import com.example.chat.user.repository.UserRepository
 import org.bson.types.ObjectId
+import org.springframework.dao.DuplicateKeyException
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.Pageable
@@ -20,16 +21,8 @@ class FollowService(
     private val userRepository: UserRepository,
 ) {
 
-    /**
-     * One idempotent toggle: follows the target if not already following, otherwise unfollows.
-     * Returns the resulting state (`following = true` means you now follow them).
-     *
-     * The `follows` edge is the source of truth and is written first; the denormalized User
-     * counters are then adjusted with atomic `$inc` (race-safe — concurrent follows can't lose
-     * an update). Counters are derived data, so if they ever drift they can be rebuilt by
-     * counting the `follows` collection.
-     */
-    @Transactional
+    /** Follows the target if not already following, otherwise unfollows; returns the new state.
+     *  Not @Transactional on purpose: keeps concurrent follows of the same user from colliding. */
     fun toggle(followerId: String, followeeId: String): ToggleFollowee {
         val followerId = ObjectId(followerId)
         val followeeId = ObjectId(followeeId)
@@ -51,8 +44,12 @@ class FollowService(
     }
 
     private fun follow(followerId: ObjectId, followeeId: ObjectId) {
-        // Edge first (authoritative); the unique compound index blocks accidental duplicates.
-        followsRepository.save(Follows(followerId = followerId, followeeId = followeeId))
+        // Idempotent: insert the edge; a duplicate (unique index) means already following, so skip the re-count.
+        try {
+            followsRepository.insert(Follows(followerId = followerId, followeeId = followeeId))
+        } catch (e: DuplicateKeyException) {
+            return
+        }
         userRepository.incrementFollowersCount(followeeId)
         userRepository.incrementFollowingCount(followerId)
     }
@@ -69,18 +66,16 @@ class FollowService(
      * denormalized counter is decremented so surviving profiles stay accurate; [userId]'s own
      * counters are left as-is since the document is about to be anonymized.
      */
-    @Transactional
     fun purgeUser(userId: ObjectId) {
-        // userId follows X  → X loses a follower
-        followsRepository.findByFollowerId(userId).forEach {
-            userRepository.decrementFollowersCount(it.followeeId)
-            followsRepository.delete(it)
-        }
-        // X follows userId  → X loses someone they were following
-        followsRepository.findByFolloweeId(userId).forEach {
-            userRepository.decrementFollowingCount(it.followerId)
-            followsRepository.delete(it)
-        }
+        // userId follows X  → each X loses a follower. Bulk-decrement, then drop the edges in one call.
+        val followeeIds = followsRepository.findByFollowerId(userId).map { it.followeeId }
+        if (followeeIds.isNotEmpty()) userRepository.decrementFollowersCountForAll(followeeIds)
+        followsRepository.deleteByFollowerId(userId)
+
+        // X follows userId  → each X loses someone they were following.
+        val followerIds = followsRepository.findByFolloweeId(userId).map { it.followerId }
+        if (followerIds.isNotEmpty()) userRepository.decrementFollowingCountForAll(followerIds)
+        followsRepository.deleteByFolloweeId(userId)
     }
 
     /** People who follow [userId] (the followers list), one page at a time. */

@@ -3,6 +3,7 @@ package com.example.chat.user.entities
 import com.example.chat.user.enums.Role
 import org.bson.types.ObjectId
 import org.springframework.data.annotation.Id
+import org.springframework.data.annotation.Version
 import org.springframework.data.mongodb.core.index.Indexed
 import org.springframework.data.mongodb.core.mapping.Document
 import java.time.Instant
@@ -24,6 +25,12 @@ data class User(
      *  scheduled purge anonymizes the document permanently. */
     val deleted: Boolean = false,
     val deletedAt: Instant? = null,
+    /** Optimistic-lock version, kept as a safety net. Today every user write goes through a
+     *  targeted `updateUserById` ($set/$inc), which can't clobber other fields and does NOT touch
+     *  this version. It exists so that any future read-modify-write via [save] is automatically
+     *  guarded: Spring Data increments it on save and throws OptimisticLockingFailureException
+     *  (handled as 409) if the document changed since it was read. */
+    @Version val version: Long? = null,
     @Id val id: ObjectId = ObjectId()
 ) {
     companion object {
